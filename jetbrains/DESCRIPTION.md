@@ -24,7 +24,7 @@ an English summary; no marketing adjectives or unverifiable claims.
 
 Inspect scientific, HDR and standard images in editor tabs: exact pixel values, normalization, gamma and exposure. Decoding runs locally in Rust compiled to WebAssembly; image data is never uploaded.
 
-Supports TIFF/OME-TIFF (including multi-file OME filesets), OpenEXR, NumPy NPY/NPZ, FITS, DICOM, classic NetCDF, Zeiss CZI, Nikon ND2, Leica LIF, Becker & Hickl SDT, Radiance HDR, PFM, PPM/PGM/PBM, SGI RGB, TGA, JPEG XL, JPEG XR, JPEG 2000, PNG, JPEG, WebP, AVIF, BMP and ICO. Layered documents from OpenRaster, Krita, Photoshop PSD/PSB, GIMP XCF and Affinity Photo are previewed too.
+Supports TIFF/OME-TIFF (including multi-file OME filesets), OpenEXR, NumPy NPY/NPZ, FITS, DICOM, classic NetCDF, Zeiss CZI, Nikon ND2, Leica LIF, Hamamatsu NDPI, Becker & Hickl SDT, Radiance HDR, PFM, PPM/PGM/PBM, SGI RGB, TGA, JPEG XL, JPEG XR, JPEG 2000, PNG, JPEG, WebP, AVIF, BMP and ICO. Layered documents from OpenRaster, Krita, Photoshop PSD/PSB, GIMP XCF and Affinity Photo are previewed too.
 
 ## Sample types
 
@@ -65,6 +65,7 @@ Supports TIFF/OME-TIFF (including multi-file OME filesets), OpenEXR, NumPy NPY/N
 - **Multi-page TIFF**: step through pages, even without dimension metadata.
 - **DICOM**: frames of multi-frame objects, including JPEG Baseline.
 - **CZI / ND2 / LIF**: arrow keys for Z, `[` and `]` for channels, or one slider per axis; channel sliders show the dye name. Mosaic tiles are assembled into the full frame. ND2 adds time and stage-position axes; LIF adds a series selector.
+- **NDPI**: Hamamatsu whole-slide images of any size open on their stored overview and load full-resolution detail for the visible region while zooming; the overlay selects focal planes and the macro photograph.
 - **SDT**: FLIM/TCSPC histograms as integrated intensity, mean photon arrival time in nanoseconds, or a single time bin.
 - **NetCDF**: pick a numeric variable and step through its non-spatial dimensions. X/Y grids render as rasters; MPAS `nCells` fields render as cell polygons.
 

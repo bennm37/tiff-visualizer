@@ -2,7 +2,7 @@
 
 Rust-based image decoding and GPU accelerated rendering for high-bit-depth, floating-point, scientific, and standard image files inside Visual Studio Code.
 
-Supports TIFF/OME-TIFF (including embedded multi-file filesets), EXR, NPY/NPZ, PNG, JPEG, WebP, AVIF, HDR, JXL, JPEG XR, JPEG 2000, SGI RGB, TGA, BMP, ICO, PPM, PFM, PBM, PGM, FITS, DICOM, classic NetCDF, Zeiss CZI, Nikon ND2, Leica LIF, and Becker & Hickl SDT.
+Supports TIFF/OME-TIFF (including embedded multi-file filesets), EXR, NPY/NPZ, PNG, JPEG, WebP, AVIF, HDR, JXL, JPEG XR, JPEG 2000, SGI RGB, TGA, BMP, ICO, PPM, PFM, PBM, PGM, FITS, DICOM, classic NetCDF, Zeiss CZI, Nikon ND2, Leica LIF, Hamamatsu NDPI, and Becker & Hickl SDT.
 Layered creative documents
 are previewed from OpenRaster, Krita, Photoshop PSD/PSB, GIMP XCF, and Affinity Photo files.
 
@@ -85,6 +85,7 @@ Float Image Visualization Options:
 - **DICOM:** Use **Scientific Image Visualizer: Open Folder as DICOM Dataset**, select an acquisition series, and navigate its slices and available time, echo, and frame dimensions. Physical files remain grouped by DICOM identity instead of being mixed into a filename-sorted collection. Multi-frame objects, including JPEG Baseline objects, expose a Frame control.
 - **Ordinary multi-page TIFF:** Navigate top-level pages even when no semantic dimension metadata is available.
 - **CZI / ND2 / LIF:** Step through Z with the arrow keys and channels with `[` / `]`, or use one slider per axis; channel sliders show the dye name from the embedded metadata. Mosaic tiles are assembled into the full frame; mosaics too large to hold at once open at a stored pyramid level and load detail as you zoom. ND2 exposes time and stage-position axes; LIF adds an `S` slider for choosing among the image series in the file.
+- **NDPI:** Open Hamamatsu whole-slide images of any size. The stored overview appears first and full-resolution detail loads for the visible region while zooming; only the parts of the file a view needs are read. Choose a focal plane or the macro photograph from the overlay, and measure in micrometres from the slide's own scale.
 - **SDT:** Explore Becker & Hickl FLIM/TCSPC histograms as integrated intensity, mean photon-arrival time in nanoseconds, or a selected raw time bin. Multi-block files expose a block selector.
 - **NetCDF:** Select a numeric variable and move through its non-spatial dimensions. Regular X/Y arrays render as rasters; MPAS `nCells` fields render on their unstructured cell polygons in an equirectangular mesh view.
 

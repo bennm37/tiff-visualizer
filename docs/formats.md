@@ -13,6 +13,7 @@
 | CZI | Yes | Yes | No | Yes | Zeiss microscopy; uncompressed/JPEG/LZW/JPEG XR/Zstd/CHUNKED subblocks, Z/C/T plane selection, mosaic tiles |
 | ND2 | Yes | Yes | No | Yes | Nikon microscopy; modern chunk-based files, uncompressed frames, T/P/Z/C plane selection |
 | LIF | Yes | Yes | No | Yes | Leica microscopy; multi-series files, Z/T/mosaic plane selection, planar channels |
+| NDPI | Yes | No | No | No | Hamamatsu whole-slide images; JPEG levels read in parts, focal planes, macro image |
 | SDT | No | Yes | No | Yes | uint16/uint32/float64 source histograms; intensity, mean-arrival, and raw time-bin views |
 | HDR | No | No | No | Yes | Radiance RGBE, decoded to float32 |
 | PFM | No | No | No | Yes | Portable Float Map |
@@ -25,7 +26,7 @@
 
 File extensions registered by the extension:
 `tif tiff tf2 tf8 btf exr pfm npy npz ppm pgm pbm hdr tga rgb rgba sgi bw jxl jxr wdp hdp
-jp2 jpf jpx j2k j2c jpc fits fit fts dcm dicom nc cdf czi nd2 lif sdt ora
+jp2 jpf jpx j2k j2c jpc fits fit fts dcm dicom nc cdf czi nd2 lif ndpi sdt ora
 kra psd psb xcf afphoto af` open automatically, as do
 `png jpeg jpg bmp ico webp avif`. If another extension or an earlier choice
 already owns one of these types, use **Open With… → Configure default editor →
@@ -202,7 +203,7 @@ float32 display carrier, so float64 and large integers can lose precision.
 
 See [multi-dimensional datasets](./datasets.md#numpy-npy--npz) for an example.
 
-### FITS, DICOM, NetCDF, CZI, ND2, LIF and SDT
+### FITS, DICOM, NetCDF, CZI, ND2, LIF, NDPI and SDT
 
 These share a lifecycle: parse the container, list the numeric arrays it
 holds, let you pick one, then treat it as an image with extra dimensions.
@@ -258,6 +259,23 @@ holds, let you pick one, then treat it as an image with extra dimensions.
   `B` control. Uncompressed and ZIP-compressed uint16/uint32 histogram blocks
   are supported. Mean arrival is an exploratory visualization, not a fitted
   fluorescence lifetime.
+
+- **NDPI** — Hamamatsu NanoZoomer whole-slide images. An NDPI file is
+  TIFF-shaped but not a TIFF a general reader can follow: offsets are 64-bit
+  inside a 32-bit layout, each pyramid level is one JPEG stream however large,
+  and the levels, focal planes, macro photograph and slide map are all plain
+  top-level images told apart by Hamamatsu's private tags. The viewer reads
+  it natively. Only the slide's directories and the JPEG restart intervals a
+  view covers are read, so a multi-gigabyte slide — including one above
+  4 GB — opens in moments and never has to fit in memory. Slides above
+  16 megapixels open at the stored level that fits an overview and load
+  finer levels for the visible region while zooming, like large TIFF
+  pyramids. Samples are 8-bit RGB (or greyscale) and open in gamma mode, as a
+  photograph does, not auto-normalized. JPEG-compressed slides are
+  supported; fluorescence slides stored as JPEG XR (compression 22610) and
+  `.ndpis` multi-channel sets are not, and say so. A level without a
+  restart-interval index can only be decoded whole, which works up to
+  65535 pixels a side.
 
 See [datasets](./datasets.md) for navigation.
 

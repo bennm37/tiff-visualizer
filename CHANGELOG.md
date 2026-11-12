@@ -8,6 +8,7 @@
 - Add optional scroll-to-zoom and drag-to-pan controls.
 - Improve Fit for small images and window resizing.
 - Add SGI RGB image support.
+- Open Hamamatsu NDPI whole-slide images, including slides larger than 4 GB: the stored overview first, full-resolution detail while zooming, with focal planes, the macro image and a micrometre scale.
 - Improve NumPy dataset loading and navigation.
 
 ## 1.11.0 (2026-09-06)

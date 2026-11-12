@@ -14,6 +14,7 @@ ambiguous. User-facing format support lives in `README.md` and `docs/formats.md`
 | Shared display defaults, types and mode policy | `shared/display-settings.ts` |
 | Extension routing | `media/modules/format-registry.ts` |
 | Decoder lifecycle and active-image adapters | `media/modules/*-processor.ts` |
+| Ranged file access (CZI, NDPI) and their shared pyramid scene | `media/modules/czi-source.ts`, `media/modules/ndpi-source.ts`, `media/modules/ranged-scene-processor.ts` |
 | Active image, measurement/histogram adapters and cache snapshots | `media/modules/active-image.ts` |
 | Load installation and navigation/cancellation lifecycle | `media/modules/image-load.ts`, `media/modules/image-navigation.ts` |
 | Cross-host messages and automation validation | `shared/viewer-protocol.ts` |

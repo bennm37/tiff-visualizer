@@ -143,6 +143,32 @@ the scale.
 Stepping planes re-decodes from bytes the decode worker keeps between requests,
 so only the first plane of a file pays the read cost.
 
+## NDPI
+
+Hamamatsu whole-slide images. Resolution selection is automatic, exactly as
+for a [pyramidal TIFF](#pyramidal-tiff-cog-whole-slide): the slide opens on a
+stored overview level, zooming loads finer stored levels for the visible
+region, and the read-only strip reports **Preview 1/16 · Detail 1:1**. Cursor
+positions and pixel readouts use full-resolution slide coordinates.
+
+The overlay offers what else the file holds:
+
+- **S** chooses between the **Slide** and its **Macro** photograph (the
+  low-magnification picture of the whole glass slide, label included), when
+  the file has one.
+- **Z** steps through focal planes when the slide was scanned as a Z-stack.
+  `←` / `→` step through them as for a CZI stack. A slide opens on the plane
+  at its nominal focus (offset 0), which is not necessarily the first.
+
+The slide's resolution tags are adopted as the measure
+[calibration](./measure.md) in micrometres, so a scale bar and measurements
+in µm need no setup. The metadata panel lists the objective magnification,
+the focal-plane offsets in nanometres and the scanner's own property list.
+
+Histograms, layer operations and exports of a slide shown as a pyramid use the
+loaded overview, as for large TIFFs. Opening a slide from a URL downloads it
+first; only local files are read in parts.
+
 ## NetCDF
 
 Classic (v3) NetCDF. Select a numeric **variable**, then move through its
