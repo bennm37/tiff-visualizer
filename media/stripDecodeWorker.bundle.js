@@ -213,6 +213,12 @@ function decode_exr_zip_f32_blocks_stats(blob, counts, rows, width) {
   }
   return RawRangeResult.__wrap(ret[0]);
 }
+function passArrayF64ToWasm0(arg, malloc) {
+  const ptr = malloc(arg.length * 8, 8) >>> 0;
+  getFloat64ArrayMemory0().set(arg, ptr / 8);
+  WASM_VECTOR_LEN = arg.length;
+  return ptr;
+}
 function decode_czi_region(directory, options_json, blob, offsets) {
   const ptr0 = passArray8ToWasm0(directory, wasm.__wbindgen_malloc);
   const len0 = WASM_VECTOR_LEN;
@@ -227,12 +233,6 @@ function decode_czi_region(directory, options_json, blob, offsets) {
     throw takeFromExternrefTable0(ret[1]);
   }
   return DecodedArray.__wrap(ret[0]);
-}
-function passArrayF64ToWasm0(arg, malloc) {
-  const ptr = malloc(arg.length * 8, 8) >>> 0;
-  getFloat64ArrayMemory0().set(arg, ptr / 8);
-  WASM_VECTOR_LEN = arg.length;
-  return ptr;
 }
 function decode_tiff_float_strip_range(blob, counts, first_strip, width, height, channels, bits_per_sample, compression, rows_per_strip, predictor, sample_format, little_endian, planar_configuration, orientation, tile_width, tile_length, blocks_across, lerc_additional_compression, photometric_interpretation) {
   const ptr0 = passArray8ToWasm0(blob, wasm.__wbindgen_malloc);
