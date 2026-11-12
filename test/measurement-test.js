@@ -939,6 +939,15 @@ async function main() {
 
 	console.log('\n📏 Calibration');
 
+	await test('numbers keep the zeros that are digits', () => {
+		assert.strictEqual(calibration.formatNumber(20000), '20000');
+		assert.strictEqual(calibration.formatNumber(1234500), '1234500');
+		assert.strictEqual(calibration.formatNumber(600), '600');
+		assert.strictEqual(calibration.formatNumber(2.5), '2.5');
+		assert.strictEqual(calibration.formatNumber(0.25), '0.25');
+		assert.strictEqual(calibration.formatNumber(12.3456), '12.35');
+	});
+
 	await test('a reduced pyramid level has proportionally larger pixels', () => {
 		const full = calibration.calibrationFromNdpi({ scalingXUm: 0.5, scalingYUm: 0.25 });
 		assert.strictEqual(full.origin, 'ndpi');

@@ -207,6 +207,7 @@ test('ROIs draw on an NDPI scene and measure in its calibrated units', async ({ 
   await panel.locator('.measure-tab').getByText('Results', { exact: true }).click();
   const row = panel.locator('.measure-results-wrapper tbody tr');
   await expect(row).toHaveCount(1);
+  await expect(row.locator('td').nth(2)).toHaveText('20000');
   await expect(row.locator('td').nth(3)).toHaveText('600');
 
   // The outline is painted where that rectangle lies on the scene.
