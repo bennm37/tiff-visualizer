@@ -107,6 +107,12 @@ export class PyramidScene {
 	}
 
 	clearTiles(): void {
+		this.clearStackTiles();
+		this.clearBlockTiles();
+	}
+
+	/** Drop retained per-level tiles, keeping composited stack tiles. */
+	clearBlockTiles(): void {
 		for (const tile of this._tiles.values()) { tile.element.remove(); }
 		this._tiles.clear();
 		this._tilePixels = 0;
@@ -313,7 +319,41 @@ export class PyramidScene {
 		return null;
 	}
 
-	get tileCount(): number { return this._tiles.size; }
+	private readonly _stackTiles = new Map<string, HTMLCanvasElement>();
+
+	/**
+	 * Place a tile of the composited layer stack. Layer detail is composited
+	 * per pixel in stack order, so it is shown instead of the base canvas (which
+	 * holds the overview composite), never as separate per-layer tiles.
+	 * `rect` is in scene (full-resolution) pixels.
+	 */
+	setStackTile(key: string, rect: Rect, canvas: HTMLCanvasElement): void {
+		this._stackTiles.get(key)?.remove();
+		canvas.className = 'pyramid-tile';
+		canvas.style.left = `${(rect.x / this.fullWidth) * 100}%`;
+		canvas.style.top = `${(rect.y / this.fullHeight) * 100}%`;
+		canvas.style.width = `${(rect.width / this.fullWidth) * 100}%`;
+		canvas.style.height = `${(rect.height / this.fullHeight) * 100}%`;
+		canvas.style.zIndex = '1000000';
+		this.element.appendChild(canvas);
+		this._stackTiles.set(key, canvas);
+	}
+
+	hasStackTile(key: string): boolean { return this._stackTiles.has(key); }
+
+	/** Drop stack tiles whose key does not start with `prefix`. */
+	retainStackTiles(prefix: string): void {
+		for (const [key, canvas] of this._stackTiles) {
+			if (!key.startsWith(prefix)) { canvas.remove(); this._stackTiles.delete(key); }
+		}
+	}
+
+	clearStackTiles(): void {
+		for (const canvas of this._stackTiles.values()) { canvas.remove(); }
+		this._stackTiles.clear();
+	}
+
+	get tileCount(): number { return this._tiles.size + this._stackTiles.size; }
 	get tilePixels(): number { return this._tilePixels; }
 
 	private _evict(): void {

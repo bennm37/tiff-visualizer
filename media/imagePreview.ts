@@ -84,6 +84,7 @@ import { offerPrefetch, offerPushedSource, setPushedSourceChannel, startPrefetch
 import type { LayeredDocumentFormat } from './modules/layered-document.js';
 import { isTiffPath, layeredFormatOf, resolveFormat } from './modules/format-registry.js';
 import { PyramidScene } from './modules/pyramid-scene.js';
+import { compositeDetailTile, planDetail, supportsLayerDetail } from './modules/layer-detail.js';
 import { micronsPerPixel, parseCellsAutoOpen, shouldAutoOpenCells } from './modules/cells/cells-relevance.js';
 import type { ImageCells } from './modules/cells/image-cells.js';
 import type { CellsPanelModel } from './modules/cells/cells-model.js';
@@ -2803,7 +2804,10 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 	function deriveBaseLayer(): LayerInput | null {
 		const uri = settingsManager.settings.resourceUri || '';
 		const name = layerBaseName(uri);
-		return imageLayer(getActiveImage(), name, uri) || baseFromCanvas(name, uri);
+		const base = imageLayer(getActiveImage(), name, uri) || baseFromCanvas(name, uri);
+		const detail = rangedSceneProcessor()?.layerDetailSource?.();
+		if (base && detail) { base.detail = detail; }
+		return base;
 	}
 
 	/**
@@ -2834,7 +2838,12 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 				: format.kind === 'layered' ? layeredDecodeWorkerClient
 				: format.kind === 'pfm' || format.kind === 'netpbm' || (format.kind === 'npy' && resourceUri.toLowerCase().endsWith('.npy')) ? fastRawWorkerClient : decodeWorkerClient;
 			await processor.load(src, format.layeredFormat);
-			return imageLayer(processor.activeImage, name, resourceUri) || decodeViaImage(src, name, resourceUri);
+			const loaded = imageLayer(processor.activeImage, name, resourceUri);
+			if (loaded) {
+				const detail = (processor as any).layerDetailSource?.();
+				if (detail) { loaded.detail = detail; }
+			}
+			return loaded || decodeViaImage(src, name, resourceUri);
 		} catch (error) {
 			console.error('Failed to decode layer', resourceUri, error);
 			return null;
@@ -2947,7 +2956,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 				_layerBaseId = existing.id;
 				Object.assign(existing, {
 					data: base.data, width: base.width, height: base.height,
-					channels: base.channels, isFloat: base.isFloat, typeMax: base.typeMax,
+					channels: base.channels, isFloat: base.isFloat, typeMax: base.typeMax, detail: base.detail,
 				});
 				layerManager.canvasWidth = base.width;
 				layerManager.canvasHeight = base.height;
@@ -2962,6 +2971,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 	 */
 	function recompositeLayers(interactive = false, requestedStateRevision?: number): boolean {
 		if (!layerManager.active || !canvas) { return false; }
+		invalidateLayerDetail();
 		const stateRevision = requestedStateRevision ?? ++_layerStateRevision;
 		const interactionStartedAt = _layerRevisionStartedAt.get(stateRevision) ?? performance.now();
 		const fullWidth = layerManager.canvasWidth, fullHeight = layerManager.canvasHeight;
@@ -6744,10 +6754,92 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		}
 	}
 
+	// --- Layer detail -----------------------------------------------------
+	//
+	// With a layer stack, finer pyramid levels are composited through the whole
+	// stack (layer-detail.ts) so each layer's detail stays above the layers
+	// below it and under the layers above it. The result replaces the plain
+	// per-level tiles, which would cover every other layer.
+
+	const LAYER_DETAIL_TILE_PX = 1024;
+	let _layerDetailRun = 0;
+	let _layerDetailController: AbortController | null = null;
+
+	function layerDetailMode(): boolean {
+		return !!_pyramidScene && layerManager.active && layerManager.hasCompositeStack()
+			&& supportsLayerDetail(layerManager.layers);
+	}
+
+	/** The stack changed: stale detail must not stay over the new composite. */
+	function invalidateLayerDetail(): void {
+		_layerDetailRun++;
+		_layerDetailController?.abort();
+		_layerDetailController = null;
+		if (!_pyramidScene) { return; }
+		_pyramidScene.clearStackTiles();
+		if (layerDetailMode() || _pyramidScene.tileCount) { scheduleLevelRefinement(); }
+	}
+
+	async function updateLayerDetail(scene: PyramidScene): Promise<void> {
+		const run = ++_layerDetailRun;
+		_layerDetailController?.abort();
+		const controller = new AbortController();
+		_layerDetailController = controller;
+		scene.clearBlockTiles();
+		const layers = layerManager.layers;
+		const canvasWidth = layerManager.canvasWidth, canvasHeight = layerManager.canvasHeight;
+		const elementRect = scene.element.getBoundingClientRect();
+		const cssPerCanvas = elementRect.width / Math.max(1, canvasWidth);
+		const plan = planDetail(layers, cssPerCanvas * (window.devicePixelRatio || 1));
+		if (!plan) { scene.clearStackTiles(); return; }
+		const visible = visibleImageRect(
+			{ imageWidth: canvasWidth, imageHeight: canvasHeight },
+			Math.min(window.innerWidth, elementRect.width), Math.min(window.innerHeight, elementRect.height),
+			cssPerCanvas, Math.max(0, -elementRect.left), Math.max(0, -elementRect.top));
+		const size = Math.max(1, Math.floor(LAYER_DETAIL_TILE_PX / plan.grid));
+		const prefix = `${plan.grid}|`;
+		const stats = layerManager.getComposite()?.stats;
+		const centreX = visible.x + visible.width / 2, centreY = visible.y + visible.height / 2;
+		const tiles: { x: number, y: number }[] = [];
+		for (let y = Math.floor(visible.y / size) * size; y < visible.y + visible.height; y += size) {
+			for (let x = Math.floor(visible.x / size) * size; x < visible.x + visible.width; x += size) { tiles.push({ x, y }); }
+		}
+		tiles.sort((a, b) => Math.hypot(a.x + size / 2 - centreX, a.y + size / 2 - centreY)
+			- Math.hypot(b.x + size / 2 - centreX, b.y + size / 2 - centreY));
+		const factorX = scene.fullWidth / canvasWidth, factorY = scene.fullHeight / canvasHeight;
+		beginTiffViewportLoad();
+		try {
+			for (const origin of tiles) {
+				if (run !== _layerDetailRun || controller.signal.aborted) { return; }
+				const rect = { x: origin.x, y: origin.y,
+					width: Math.min(size, canvasWidth - origin.x), height: Math.min(size, canvasHeight - origin.y) };
+				const key = `${prefix}${rect.x}:${rect.y}`;
+				if (scene.hasStackTile(key)) { continue; }
+				const result = await compositeDetailTile(layers, rect, plan, controller.signal);
+				if (!result || run !== _layerDetailRun || controller.signal.aborted || scene !== _pyramidScene) { return; }
+				const image = layerManager.renderCompositeToImageData(
+					stats ? { ...result, stats } : result, settingsManager.settings,
+					{ nanColor: getNanColorObj(), cache: false });
+				const tile = document.createElement('canvas');
+				tile.width = image.width;
+				tile.height = image.height;
+				tile.getContext('2d')?.putImageData(image, 0, 0);
+				scene.setStackTile(key, { x: rect.x * factorX, y: rect.y * factorY,
+					width: rect.width * factorX, height: rect.height * factorY }, tile);
+				mouseHandler.refreshAtPointer();
+			}
+			if (run === _layerDetailRun) { scene.retainStackTiles(prefix); }
+		} finally {
+			endTiffViewportLoad();
+		}
+	}
+
 	/** Fill an oversized pyramid scene with retained, block-aligned detail. */
 	async function updatePyramidSceneTiles(): Promise<void> {
 		const scene = _pyramidScene;
 		if (!scene || !hasLoadedImage || _imageTransitionActive) { return; }
+		if (layerDetailMode()) { await updateLayerDetail(scene); return; }
+		scene.clearStackTiles();
 		if (_pyramidTileLoadPending) { _pyramidTileLoadQueued = true; return; }
 		const provider = sceneSource();
 		const directory = scenePageDirectory(provider.pageDirectory);

@@ -21,6 +21,8 @@
  *    opacity, clipping, or mask coverage shields the composite from it.
  */
 
+import type { LayerDetailSource } from './layer-detail.js';
+
 export type AdjustmentChannel = { shadowInput?: number; highlightInput?: number; shadowOutput?: number; highlightOutput?: number; midtoneInput?: number } | { input: number; output: number }[];
 export type MixerChannel = { red?: number; green?: number; blue?: number; constant?: number };
 export type BalanceRange = { cyanRed?: number; magentaGreen?: number; yellowBlue?: number };
@@ -54,6 +56,8 @@ export interface Layer {
 	sourceNodeId?: string;
 	sourceSupport?: 'native' | 'cached-raster' | 'approximate' | 'inspect-only' | 'unsupported';
 	sourceBlendMode?: string;
+	/** Finer pyramid levels of this layer's image, read on demand (see layer-detail.ts). */
+	detail?: LayerDetailSource;
 	/** Raw pixel data (interleaved by channel). */
 	data?: ArrayLike<number>;
 	width: number;

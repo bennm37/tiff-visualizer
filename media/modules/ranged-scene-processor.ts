@@ -14,6 +14,7 @@
 import { ScientificArrayProcessor } from './scientific-array-processor.js';
 import { ImageRenderer, NormalizationHelper } from './normalization-helper.js';
 import type { TiffPageEntry } from './tiff-pages.js';
+import type { LayerDetailSource } from './layer-detail.js';
 
 const REGION_CACHE_MAX_BYTES = 96 * 1024 * 1024;
 const READOUT_BLOCK = 256;
@@ -129,6 +130,23 @@ export abstract class RangedSceneProcessor extends ScientificArrayProcessor {
 		if (generation !== this._sceneGeneration || signal?.aborted || !decoded?.data?.length) { return null; }
 		this._cacheRegion(levelIndex, rect.x, rect.y, decoded.width, decoded.height, decoded.channels, decoded.data);
 		return decoded;
+	}
+
+	/** Raw samples of a level rectangle, in the numeric domain of the loaded image. */
+	async readRegionSamples(levelIndex: number, rect: SceneRect, signal?: AbortSignal): Promise<SceneRegion | null> {
+		try { return await this._decodeLevelRegion(levelIndex, rect, signal); } catch (error) {
+			if (!signal?.aborted) { console.warn(`[${this.config.formatLabel}] layer detail read failed:`, error); }
+			return null;
+		}
+	}
+
+	/** The scene's levels as a layer detail source; null when the image is not a scene. */
+	layerDetailSource(): LayerDetailSource | null {
+		if (!this.isScene) { return null; }
+		return {
+			levels: this.pageDirectory.map(level => ({ index: level.index, width: level.width, height: level.height })),
+			readRegion: (level, rect, signal) => this.readRegionSamples(level, rect, signal),
+		};
 	}
 
 	/** A level rectangle rendered with the image-wide statistics, as the scene paints it. */

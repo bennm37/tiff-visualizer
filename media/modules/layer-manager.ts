@@ -34,6 +34,7 @@ export interface LayerInput {
 	parentId?: string;
 	clipped?: boolean;
 	rasterMask?: Layer['rasterMask'];
+	detail?: Layer['detail'];
 }
 
 let _nextLayerId = 1;
@@ -537,6 +538,7 @@ export class LayerManager {
 		l.parentId = settings.parentId ?? input.parentId;
 		l.clipped = settings.clipped ?? input.clipped;
 		l.rasterMask = settings.rasterMask ?? input.rasterMask;
+		l.detail = settings.detail ?? input.detail;
 		return l;
 	}
 
@@ -581,6 +583,7 @@ export class LayerManager {
 			parentId: layer.parentId,
 			clipped: layer.clipped,
 			rasterMask: layer.rasterMask,
+			detail: layer.detail,
 		};
 	}
 }
