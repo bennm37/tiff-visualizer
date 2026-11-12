@@ -234,6 +234,17 @@ export function calibrationFromCzi(metadata: {
 }
 
 /**
+ * Derive calibration from an NDPI slide's resolution tags, which the decoder
+ * reports in the same `scalingXUm`/`scalingYUm` fields as CZI: micrometres
+ * per pixel of the image as shown (per full-resolution pixel for a slide
+ * opened as a pyramid scene).
+ */
+export function calibrationFromNdpi(metadata: Parameters<typeof calibrationFromCzi>[0]): Calibration | null {
+	const calibration = calibrationFromCzi(metadata);
+	return calibration ? { ...calibration, origin: 'ndpi' } : null;
+}
+
+/**
  * Pick the best available automatic calibration.
  *
  * OME wins over baseline tags: when a file carries both, the OME block is the
@@ -282,6 +293,7 @@ export function describeCalibration(calibration: Calibration): string {
 			: calibration.origin === 'dicom' ? 'from DICOM Pixel Spacing'
 				: calibration.origin === 'dicom-detector' ? 'from DICOM Imager Pixel Spacing (detector plane)'
 					: calibration.origin === 'czi' ? 'from CZI scaling metadata'
+					: calibration.origin === 'ndpi' ? 'from NDPI resolution tags'
 						: calibration.origin === 'imported' ? 'from the ROI file'
 						: 'set manually';
 	return `${size} (${sourceLabel})`;

@@ -31,6 +31,7 @@
     "lif",
     "nc",
     "nd2",
+    "ndpi",
     "npy",
     "npz",
     "ora",
@@ -52,6 +53,7 @@
     "tiff",
     "wdp",
     "webp",
-    "xcf"
+    "xcf",
+    "xenium"
   ]
 }

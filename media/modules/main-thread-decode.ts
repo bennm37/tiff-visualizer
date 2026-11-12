@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Main-thread Rust/WASM decode path for the formats that have no
- * TypeScript parser: PFM, NetPBM, NPY/NPZ, FITS, NetCDF, DICOM, CZI, ND2, LIF and SDT.
+ * TypeScript parser: PFM, NetPBM, NPY/NPZ, FITS, NetCDF, DICOM, CZI, ND2, LIF, NDPI and SDT.
  *
  * `DecodeWorkerClient.decodeWithFallback` runs these when the decode worker is
  * unavailable or its response is not ok. That used to be where the TypeScript
@@ -22,6 +22,7 @@ import { initJxlDecoder } from './jxl-wasm-wrapper.js';
 import {
 	decodeSgiWithWasm,
 	decodeCziWithWasm,
+	decodeNdpiWithWasm,
 	decodeLifWithWasm,
 	decodeNd2WithWasm,
 	decodeSdtWithWasm,
@@ -162,6 +163,11 @@ export async function decodeNd2Local(buffer: ArrayBuffer, options: Record<string
 export async function decodeLifLocal(buffer: ArrayBuffer, options: Record<string, any> = {}) {
 	const wasm = await requireWasm('LIF');
 	return decodeLifWithWasm(wasm.decode_lif_fast, buffer, options, 'main');
+}
+
+export async function decodeNdpiLocal(buffer: ArrayBuffer, options: Record<string, any> = {}) {
+	const wasm = await requireWasm('NDPI');
+	return decodeNdpiWithWasm(wasm.decode_ndpi_fast, buffer, options, 'main');
 }
 
 export async function decodeSdtLocal(buffer: ArrayBuffer, options: Record<string, any> = {}) {

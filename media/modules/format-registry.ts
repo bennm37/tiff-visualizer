@@ -39,6 +39,7 @@ export type DecoderKind =
 	| 'czi'
 	| 'nd2'
 	| 'lif'
+	| 'ndpi'
 	| 'sdt'
 	| 'layered';
 
@@ -82,6 +83,9 @@ export const FORMATS: readonly FormatEntry[] = [
 	{ kind: 'czi', label: 'Zeiss CZI', extensions: ['czi'] },
 	{ kind: 'nd2', label: 'Nikon ND2', extensions: ['nd2'] },
 	{ kind: 'lif', label: 'Leica LIF', extensions: ['lif'] },
+	// TIFF-structured, but not a TIFF a general reader can follow: see
+	// crates/image-decoders/src/formats/ndpi.rs.
+	{ kind: 'ndpi', label: 'Hamamatsu NDPI', extensions: ['ndpi'] },
 	{ kind: 'sdt', label: 'Becker & Hickl SDT', extensions: ['sdt'] },
 	{ kind: 'layered', label: 'OpenRaster', extensions: ['ora'], layeredFormat: 'ora' },
 	{ kind: 'layered', label: 'Krita', extensions: ['kra'], layeredFormat: 'kra' },

@@ -297,6 +297,39 @@ export function decodeCziWithWasm(
 }
 
 /**
+ * Hamamatsu NDPI held whole in memory. `decode_ndpi_fast` walks the slide's
+ * directories and decodes the image `options.indices` selects (`S` 1 the
+ * macro photograph, `Z` a focal plane) at `options.level`, or at the finest
+ * pyramid level within `options.maxPixels`. Slides normally open through
+ * ranged reads instead (`media/modules/ndpi-source.ts`).
+ */
+export function decodeNdpiWithWasm(
+	decodeNdpiFast: (bytes: Uint8Array, optionsJson: string) => any,
+	buffer: ArrayBuffer,
+	options: Record<string, any>,
+	context: DecodeContext,
+) {
+	const startedAt = performance.now();
+	const result = decodeNdpiFast(new Uint8Array(buffer), JSON.stringify(options || {}));
+	return assembleDecoded<Float32Array>(result, 'ndpi', context, startedAt);
+}
+
+/**
+ * A JSON answer about part of a file: the same piece convention as
+ * `decodeRangedWithWasm`, for entry points that describe rather than decode
+ * (an NDPI slide's layout, the byte plan of a region).
+ */
+export function describeRangedWithWasm(
+	describe: (blob: Uint8Array, offsets: Float64Array, lengths: Uint32Array, fileSize: number, optionsJson: string) => string,
+	buffer: ArrayBuffer,
+	options: Record<string, any>,
+) {
+	const { rangedOffsets, rangedLengths, fileSize, ...rest } = options || {};
+	return JSON.parse(describe(new Uint8Array(buffer), new Float64Array(rangedOffsets || []), new Uint32Array(rangedLengths || []),
+		Number(fileSize) || 0, JSON.stringify(rest)));
+}
+
+/**
  * A decoder run on part of a file (Rust `SparseFile`): `buffer` holds the
  * pieces read so far back to back, `options.rangedOffsets`/`rangedLengths`
  * where each came from, `options.fileSize` the whole file's size. A decoder

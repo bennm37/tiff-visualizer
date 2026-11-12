@@ -10,7 +10,7 @@ const bundle = buildSync({
 });
 const loaded = { exports: {} };
 new Function('module', 'exports', 'require', bundle.outputFiles[0].text)(loaded, loaded.exports, require);
-const { sniffImageFormat, filenameForDetectedFormat, readResponsePrefix, probeRemoteImage } = loaded.exports;
+const { sniffImageFormat, refineDetectedFormat, filenameForDetectedFormat, readResponsePrefix, probeRemoteImage } = loaded.exports;
 
 const bytes = (...values) => new Uint8Array(values);
 const text = value => new TextEncoder().encode(value);
@@ -18,6 +18,15 @@ const text = value => new TextEncoder().encode(value);
 async function main() {
 	assert.equal(sniffImageFormat(bytes(0x49, 0x49, 0x2a, 0x00)).hint, 'tiff');
 	assert.equal(sniffImageFormat(bytes(0x4d, 0x4d, 0x00, 0x2b)).hint, 'tiff', 'BigTIFF is detected');
+	// NDPI shares TIFF's magic number, so its name refines the signature. A
+	// TIFF hint would otherwise send a slide to the TIFF decoder.
+	const tiffHeader = sniffImageFormat(bytes(0x49, 0x49, 0x2a, 0x00));
+	assert.equal(refineDetectedFormat('CMU-1.ndpi', tiffHeader).hint, 'ndpi');
+	assert.equal(refineDetectedFormat('https://example.org/slides/CMU-1.NDPI?token=1', tiffHeader).hint, 'ndpi');
+	assert.equal(refineDetectedFormat('scan.tif', tiffHeader).hint, 'tiff');
+	assert.equal(refineDetectedFormat('photo.ndpi', sniffImageFormat(bytes(0xff, 0xd8, 0xff))).hint, 'jpg', 'only TIFF-structured content is refined');
+	assert.equal(refineDetectedFormat('missing.ndpi', null), null);
+	assert.equal(filenameForDetectedFormat('CMU-1.ndpi', refineDetectedFormat('CMU-1.ndpi', tiffHeader)), 'CMU-1.ndpi');
 	assert.equal(sniffImageFormat(bytes(0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10)).hint, 'png');
 	assert.equal(sniffImageFormat(bytes(0xff, 0xd8, 0xff)).hint, 'jpg');
 	assert.equal(sniffImageFormat(bytes(0x76, 0x2f, 0x31, 0x01)).hint, 'exr');

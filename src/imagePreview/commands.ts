@@ -14,11 +14,12 @@ import {
 	filenameForDetectedFormat,
 	IMAGE_HEADER_PROBE_BYTES,
 	sniffImageFormat,
+	refineDetectedFormat,
 	probeRemoteImage,
 	ImageHeaderHttpError,
 } from '../util/imageFormatSniffer';
 
-const IMAGE_EXTENSIONS = ['tif', 'tiff', 'exr', 'pfm', 'npy', 'npz', 'ppm', 'pgm', 'pbm', 'png', 'jpg', 'jpeg', 'hdr', 'tga', 'webp', 'avif', 'bmp', 'ico', 'jxl', 'jxr', 'wdp', 'hdp', 'jp2', 'jpf', 'jpx', 'j2k', 'j2c', 'jpc', 'fits', 'fit', 'fts', 'dcm', 'dicom', 'nc', 'cdf', 'czi', 'nd2', 'lif', 'sdt', 'ora', 'kra', 'psd', 'psb', 'xcf', 'afphoto', 'af'];
+const IMAGE_EXTENSIONS = ['tif', 'tiff', 'exr', 'pfm', 'npy', 'npz', 'ppm', 'pgm', 'pbm', 'png', 'jpg', 'jpeg', 'hdr', 'tga', 'webp', 'avif', 'bmp', 'ico', 'jxl', 'jxr', 'wdp', 'hdp', 'jp2', 'jpf', 'jpx', 'j2k', 'j2c', 'jpc', 'fits', 'fit', 'fts', 'dcm', 'dicom', 'nc', 'cdf', 'czi', 'nd2', 'lif', 'ndpi', 'sdt', 'ora', 'kra', 'psd', 'psb', 'xcf', 'afphoto', 'af'];
 const URL_HISTORY_STORAGE_KEY = 'tiffVisualizer.urlHistory';
 const URL_INPUT_CONTEXT = 'tiffVisualizer.urlInputActive';
 const URL_HISTORY_PREVIOUS_COMMAND = 'tiffVisualizer.urlHistoryPrevious';
@@ -1355,7 +1356,7 @@ export function registerImagePreviewCommands(
 			const probeTimeout = setTimeout(() => probeController.abort(), 5_000);
 			try {
 				const probe = await probeRemoteImage(parsed.toString(), probeController.signal);
-				detected = probe.format;
+				detected = refineDetectedFormat(name, probe.format);
 				supportsRanges = probe.supportsRanges;
 			} catch (error) {
 				if (error instanceof ImageHeaderHttpError && error.status !== 416) { throw error; }
@@ -1389,7 +1390,7 @@ export function registerImagePreviewCommands(
 				// If Range/CORS/latency made the cheap probe inconclusive, the bytes
 				// are available now anyway. Re-identify before choosing a stored name
 				// and decoder so an extensionless file still opens correctly.
-				detected ||= sniffImageFormat(bytes.subarray(0, IMAGE_HEADER_PROBE_BYTES));
+				detected ||= refineDetectedFormat(name, sniffImageFormat(bytes.subarray(0, IMAGE_HEADER_PROBE_BYTES)));
 				progress.report({ message: `${(bytes.byteLength / (1024 * 1024)).toFixed(1)} MB` });
 
 				// Downloads live under the extension's storage, not the user's

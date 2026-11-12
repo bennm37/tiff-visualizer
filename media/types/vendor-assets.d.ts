@@ -19,6 +19,10 @@ declare module '*/wasm/tiff-wasm.js' {
     export const czi_region_plan: any;
     export const decode_czi_region: any;
     export const decode_nd2_fast: any;
+    export const decode_ndpi_fast: any;
+    export const decode_ndpi_ranged: any;
+    export const ndpi_layout: any;
+    export const ndpi_region_plan: any;
     export const decode_lif_fast: any;
     export const decode_sgi_fast: any;
     export const decode_sdt_fast: any;

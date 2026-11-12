@@ -8,7 +8,7 @@
   <depends optional="true" config-file="jcef.xml">com.intellij.modules.jcef</depends>
   <extensions defaultExtensionNs="com.intellij">
     <!-- generated file types -->
-    <fileType name="Scientific Image" implementationClass="de.kleinicke.visualizer.ScientificImageFileType" fieldName="INSTANCE" extensions="af;afphoto;btf;bw;cdf;czi;dcm;dicom;exr;fit;fits;fts;hdp;hdr;j2c;j2k;jp2;jpc;jpf;jpx;jxl;jxr;kra;lif;nc;nd2;npy;npz;ora;pbm;pfm;pgm;ppm;psb;psd;rgb;rgba;sdt;sgi;tf2;tf8;tga;wdp;xcf"/>
+    <fileType name="Scientific Image" implementationClass="de.kleinicke.visualizer.ScientificImageFileType" fieldName="INSTANCE" extensions="af;afphoto;btf;bw;cdf;czi;dcm;dicom;exr;fit;fits;fts;hdp;hdr;j2c;j2k;jp2;jpc;jpf;jpx;jxl;jxr;kra;lif;nc;nd2;ndpi;npy;npz;ora;pbm;pfm;pgm;ppm;psb;psd;rgb;rgba;sdt;sgi;tf2;tf8;tga;wdp;xcf;xenium"/>
     <!-- end generated file types -->
     <fileEditorProvider implementation="de.kleinicke.visualizer.VisualizerEditorProvider"/>
     <statusBarWidgetFactory id="ScientificImage.zoom" implementation="de.kleinicke.visualizer.ImageStatusWidgetFactory$Zoom"/>

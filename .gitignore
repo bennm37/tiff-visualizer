@@ -75,6 +75,9 @@ packages/python/build/
 packages/python/dist/
 packages/python/scientific_image_visualizer/_assets/
 
+# Real NDPI slides for test/ndpi-ranged-test.js (hundreds of MB each)
+test-samples/ndpi/
+
 # Xenium tests
 test-samples/scientific/xenium
 

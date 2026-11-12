@@ -18,7 +18,7 @@
       "name": "Open scientific images",
       "accept": {
         "image/tiff": [".tif", ".tiff"],
-        "application/octet-stream": [".exr", ".pfm", ".npy", ".npz", ".fits", ".fit", ".fts", ".czi", ".nd2", ".lif", ".sdt"],
+        "application/octet-stream": [".exr", ".pfm", ".npy", ".npz", ".fits", ".fit", ".fts", ".czi", ".nd2", ".lif", ".ndpi", ".sdt"],
         "application/dicom": [".dcm", ".dicom"]
       }
     }

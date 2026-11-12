@@ -52,7 +52,7 @@ import {
 } from './modules/channel-composite.js';
 import { RoiManager } from './modules/measure/roi-manager.js';
 import { RoiOverlay } from './modules/measure/roi-overlay.js';
-import { calibrationFromOme, calibrationFromCzi, calibrationFromDicom, calibrationFromTagList } from './modules/measure/calibration.js';
+import { calibrationFromOme, calibrationFromCzi, calibrationFromNdpi, calibrationFromDicom, calibrationFromTagList } from './modules/measure/calibration.js';
 import { deserializeRoi, parseSidecar, serializeRoi } from './modules/measure/roi-io.js';
 import { toScalarPlane, UNCALIBRATED, type Calibration, type MeasurementSource } from './modules/measure/types.js';
 import type { TagEntry } from './modules/tiff-tag-utils.js';
@@ -228,6 +228,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 	let cziProcessor: any = dormantProcessor();
 	let nd2Processor: any = dormantProcessor();
 	let lifProcessor: any = dormantProcessor();
+	let ndpiProcessor: any = dormantProcessor();
 	let sdtProcessor: any = dormantProcessor();
 	let sgiProcessor: any = dormantProcessor();
 	let scientificProcessors: any[] = [];
@@ -250,7 +251,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		return processor;
 	};
 	function ensureProcessorFamily(kind: string): Promise<void> {
-		const family = ['sgi', 'fits', 'dicom', 'netcdf', 'czi', 'nd2', 'lif', 'sdt', 'jxr', 'jp2', 'jxl'].includes(kind) ? 'scientific' : kind;
+		const family = ['sgi', 'fits', 'dicom', 'netcdf', 'czi', 'nd2', 'lif', 'ndpi', 'sdt', 'jxr', 'jp2', 'jxl'].includes(kind) ? 'scientific' : kind;
 		const existing = processorFamilyLoads.get(family);
 		if (existing) { return existing; }
 		const load = (async () => {
@@ -292,9 +293,10 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 				hdrProcessor = installProcessor(new HdrProcessor(settingsManager, vscode));
 
 			} else if (family === 'scientific') {
-				const [{ ScientificArrayProcessor }, { CziProcessor }, decoders] = await Promise.all([
+				const [{ ScientificArrayProcessor }, { CziProcessor }, { NdpiProcessor }, decoders] = await Promise.all([
 					import('./modules/scientific-array-processor.js'),
 					import('./modules/czi-processor.js'),
+					import('./modules/ndpi-processor.js'),
 					import('./modules/main-thread-decode.js'),
 				]);
 				fitsProcessor = installProcessor(new ScientificArrayProcessor(settingsManager, vscode, { workerFormat: 'fits', formatLabel: 'FITS', formatType: 'fits', parse: decoders.decodeFitsLocal }));
@@ -306,11 +308,12 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 				cziProcessor = installProcessor(new CziProcessor(settingsManager, vscode, { workerFormat: 'czi', formatLabel: 'CZI', formatType: 'czi', cacheSourceInWorker: true, parse: (buffer: ArrayBuffer, options: any) => decoders.decodeCziLocal(buffer, options || {}) }));
 				nd2Processor = installProcessor(new ScientificArrayProcessor(settingsManager, vscode, { workerFormat: 'nd2', formatLabel: 'ND2', formatType: 'nd2', cacheSourceInWorker: true, ranged: 'nd2', parse: (buffer: ArrayBuffer, options: any) => decoders.decodeNd2Local(buffer, options || {}) }));
 				lifProcessor = installProcessor(new ScientificArrayProcessor(settingsManager, vscode, { workerFormat: 'lif', formatLabel: 'LIF', formatType: 'lif', cacheSourceInWorker: true, ranged: 'lif', parse: (buffer: ArrayBuffer, options: any) => decoders.decodeLifLocal(buffer, options || {}) }));
+				ndpiProcessor = installProcessor(new NdpiProcessor(settingsManager, vscode, { workerFormat: 'ndpi', formatLabel: 'NDPI', formatType: 'ndpi', parse: (buffer: ArrayBuffer, options: any) => decoders.decodeNdpiLocal(buffer, options || {}) }));
 				sdtProcessor = installProcessor(new ScientificArrayProcessor(settingsManager, vscode, { workerFormat: 'sdt', formatLabel: 'SDT', formatType: 'sdt', cacheSourceInWorker: true, parse: (buffer: ArrayBuffer, options: any) => decoders.decodeSdtLocal(buffer, options || {}) }));
 				sgiProcessor = installProcessor(new ScientificArrayProcessor(settingsManager, vscode, { workerFormat: 'sgi', formatLabel: 'SGI RGB', formatType: 'sgi', parse: (buffer: ArrayBuffer) => decoders.decodeSgiLocal(buffer) }));
-				scientificProcessors = [sgiProcessor, fitsProcessor, jxrProcessor, jp2Processor, jxlProcessor, dicomProcessor, netcdfProcessor, cziProcessor, nd2Processor, lifProcessor, sdtProcessor];
+				scientificProcessors = [sgiProcessor, fitsProcessor, jxrProcessor, jp2Processor, jxlProcessor, dicomProcessor, netcdfProcessor, cziProcessor, nd2Processor, lifProcessor, ndpiProcessor, sdtProcessor];
 
-				planeNavProcessors = [npyProcessor, cziProcessor, nd2Processor, lifProcessor, sdtProcessor];
+				planeNavProcessors = [npyProcessor, cziProcessor, nd2Processor, lifProcessor, ndpiProcessor, sdtProcessor];
 			}
 		})();
 		processorFamilyLoads.set(family, load);
@@ -970,9 +973,10 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		// earlier in the collection would go on calibrating a later TIFF in mm.
 		const dicom = dicomProcessor._lastRaw ? calibrationFromDicom(dicomProcessor.metadata) : null;
 		const czi = cziProcessor._lastRaw ? calibrationFromCzi(cziProcessor.metadata) : null;
+		const ndpi = ndpiProcessor._lastRaw ? calibrationFromNdpi(ndpiProcessor.metadata) : null;
 		const ome = tiffProcessor.rawTiffData?.ome || null;
 		const fromTags = calibrationFromTagList(tiffProcessor._lastAllTags as TagEntry[] | null);
-		measureCalibration = dicom || czi
+		measureCalibration = dicom || czi || ndpi
 			|| (ome ? calibrationFromOme(ome) : null) || fromTags || { ...UNCALIBRATED };
 		roiOverlay.scheduleRedraw();
 	}
@@ -2547,15 +2551,16 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 				updateNetCdfOverlay(processor.metadata, false);
 			}
 			if (!await installLoadedImage(processor, result, gen)) return;
-			// A CZI mosaic too large to hold whole shows a stored level inside the
-			// pyramid scene large TIFFs use; finer levels stream in on zoom.
-			const cziScene = processor === cziProcessor && cziProcessor.isScene;
-			if (cziScene && !processor._pendingRenderData) {
+			// A CZI mosaic or NDPI slide too large to hold whole shows a stored
+			// level inside the pyramid scene large TIFFs use; finer levels
+			// stream in on zoom.
+			const rangedScene = (processor === cziProcessor || processor === ndpiProcessor) && processor.isScene;
+			if (rangedScene && !processor._pendingRenderData) {
 				installPyramidSceneIfNeeded();
 				configureTiffMouseReadout();
 			}
 			if (!processor._pendingRenderData) { finalizeImageSetup(); }
-			if (cziScene && !processor._pendingRenderData) { void updateDetailPatch(); }
+			if (rangedScene && !processor._pendingRenderData) { void updateDetailPatch(); }
 			// Start the trailing decode only after this canvas has been installed.
 			// The next load yields to paint and keeps this frame visible while busy.
 			if (isPlaneNavProcessor(processor)) { onPlaneLoadSettled(); }
@@ -4053,8 +4058,8 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 						}
 
 						// Canvas now has real pixels — swap out old canvas and finalize
-						const cziScene = currentLoadFormat === 'CZI' && cziProcessor?.isScene;
-						if (currentLoadFormat === 'TIFF' || cziScene) {
+						const rangedScene = !!rangedSceneProcessor();
+						if (currentLoadFormat === 'TIFF' || rangedScene) {
 							installPyramidSceneIfNeeded();
 							configureTiffMouseReadout();
 						}
@@ -4062,7 +4067,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 						if (currentLoadFormat === 'TIFF') {
 							updateTiffPageOverlay();
 							void updateDetailPatch();
-						} else if (cziScene) {
+						} else if (rangedScene) {
 							void updateDetailPatch();
 						}
 						// Deferred render is done — clear loading indicators now
@@ -4620,6 +4625,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 							currentLoadFormat === 'CZI' ? cziProcessor :
 							currentLoadFormat === 'ND2' ? nd2Processor :
 							currentLoadFormat === 'LIF' ? lifProcessor :
+							currentLoadFormat === 'NDPI' ? ndpiProcessor :
 							currentLoadFormat === 'SGI RGB' ? sgiProcessor :
 							currentLoadFormat === 'SDT' ? sdtProcessor :
 															currentLoadFormat === 'Layered Document' ? layeredPreviewProcessor :
@@ -6498,12 +6504,22 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 
 
 	/**
+	 * The CZI or NDPI processor while it shows an image too large to hold
+	 * whole as a pyramid scene, otherwise null.
+	 */
+	function rangedSceneProcessor(): any {
+		if (currentLoadFormat === 'CZI' && cziProcessor?.isScene) { return cziProcessor; }
+		if (currentLoadFormat === 'NDPI' && ndpiProcessor?.isScene) { return ndpiProcessor; }
+		return null;
+	}
+
+	/**
 	 * The processor a pyramid scene reads its levels and regions from: the
-	 * CZI processor while it shows a mosaic too large to hold whole, the TIFF
-	 * processor otherwise. Both answer the same members (see czi-processor.ts).
+	 * CZI or NDPI processor while it shows such a scene, the TIFF processor
+	 * otherwise. All answer the same members (see ranged-scene-processor.ts).
 	 */
 	function sceneSource(): any {
-		return currentLoadFormat === 'CZI' && cziProcessor?.isScene ? cziProcessor : tiffProcessor;
+		return rangedSceneProcessor() || tiffProcessor;
 	}
 
 	/** How many stored pixels each displayed pixel stands for. 1 at full size. */
@@ -7364,7 +7380,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		const format = resolveFormat(resourceUri, formatHint);
 		const layeredFormat = (format?.kind === 'layered' ? format.layeredFormat : null)
 			|| layeredFormatForPath(lower);
-		if (format && ['tiff', 'exr', 'npy', 'pfm', 'netpbm', 'hdr', 'jxr', 'jp2', 'jxl', 'fits', 'dicom', 'netcdf', 'czi', 'nd2', 'lif', 'sdt', 'sgi'].includes(format.kind)) {
+		if (format && ['tiff', 'exr', 'npy', 'pfm', 'netpbm', 'hdr', 'jxr', 'jp2', 'jxl', 'fits', 'dicom', 'netcdf', 'czi', 'nd2', 'lif', 'ndpi', 'sdt', 'sgi'].includes(format.kind)) {
 			await ensureProcessorFamily(format.kind);
 			if (gen !== navigation.generation) { return; }
 		}
@@ -7384,7 +7400,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		// overlay is driven by a host message (a DICOM manifest) they could stay
 		// gone entirely. Only a format that can never navigate clears it, and it
 		// is cleared as soon as the format is known rather than on every load.
-		const NAVIGABLE_KINDS = ['npy', 'tiff', 'dicom', 'netcdf', 'czi', 'nd2', 'lif', 'sdt'];
+		const NAVIGABLE_KINDS = ['npy', 'tiff', 'dicom', 'netcdf', 'czi', 'nd2', 'lif', 'ndpi', 'sdt'];
 		if (!format || !NAVIGABLE_KINDS.includes(format.kind)) {
 			hideNavOverlay();
 		}
@@ -7444,6 +7460,8 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 			handleScientificArray(nd2Processor, uri, gen, planeOptions || planeSelection);
 		} else if (format?.kind === 'lif') {
 			handleScientificArray(lifProcessor, uri, gen, planeOptions || planeSelection);
+		} else if (format?.kind === 'ndpi') {
+			handleScientificArray(ndpiProcessor, uri, gen, planeOptions || planeSelection);
 		} else if (format?.kind === 'sgi') {
 			handleScientificArray(sgiProcessor, uri, gen);
 		} else if (format?.kind === 'sdt') {

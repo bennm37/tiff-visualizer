@@ -166,6 +166,19 @@ export async function probeRemoteImage(url: string, signal?: AbortSignal): Promi
 	return { format: sniffImageFormat(await readResponsePrefix(response)), supportsRanges: response.status === 206 };
 }
 
+/**
+ * A Hamamatsu NDPI slide begins with TIFF's magic number, and what makes it
+ * NDPI (its private tags, the 64-bit directory layout) lies in directories
+ * far beyond a header probe. So for this one format the name refines the
+ * signature: content that sniffs as TIFF under an `.ndpi` name is NDPI.
+ */
+export function refineDetectedFormat(name: string, format: DetectedImageFormat | null): DetectedImageFormat | null {
+	if (format?.hint === 'tiff' && /\.ndpi$/i.test(name.replace(/[?#].*$/, ''))) {
+		return detected('ndpi', 'ndpi', 'Hamamatsu NDPI');
+	}
+	return format;
+}
+
 const FORMAT_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
 	tiff: ['tif', 'tiff', 'tf2', 'tf8', 'btf'], png: ['png'], jpg: ['jpg', 'jpeg'],
 	exr: ['exr'], npy: ['npy'], npz: ['npz'], hdr: ['hdr'], pfm: ['pfm'],
@@ -173,7 +186,7 @@ const FORMAT_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
 	webp: ['webp'], avif: ['avif'], jxl: ['jxl'], jxr: ['jxr', 'wdp', 'hdp'],
 	jp2: ['jp2', 'jpf', 'jpx', 'j2k', 'j2c', 'jpc'], fits: ['fits', 'fit', 'fts'],
 	dicom: ['dcm', 'dicom'], netcdf: ['nc', 'cdf'], czi: ['czi'], nd2: ['nd2'],
-	rgb: ['rgb', 'rgba', 'sgi', 'bw'], lif: ['lif'], ora: ['ora'], kra: ['kra'], psd: ['psd'], psb: ['psb'], xcf: ['xcf'],
+	rgb: ['rgb', 'rgba', 'sgi', 'bw'], lif: ['lif'], ndpi: ['ndpi'], ora: ['ora'], kra: ['kra'], psd: ['psd'], psb: ['psb'], xcf: ['xcf'],
 };
 
 export function filenameForDetectedFormat(name: string, format: DetectedImageFormat): string {

@@ -25,12 +25,14 @@ export interface DisplaySettings {
 }
 
 // Image format types for per-format settings
-export type ImageFormatType = 'png' | 'jpg' | 'ppm' | 'tiff-float' | 'tiff-int' | 'tiff-int-signed' | 'tiff-int-wide' | 'tiff-uint16' | 'exr-float' | 'pfm' | 'hdr' | 'npy-float' | 'npy-uint' | 'sgi' | 'tga' | 'webp' | 'avif' | 'bmp' | 'ico' | 'jxl' | 'jxl-float' | 'jxr' | 'jp2' | 'fits' | 'dicom' | 'netcdf' | 'czi' | 'nd2' | 'lif' | 'sdt' | 'ora' | 'kra' | 'psd' | 'psb' | 'xcf' | 'affinity';
+export type ImageFormatType = 'png' | 'jpg' | 'ppm' | 'tiff-float' | 'tiff-int' | 'tiff-int-signed' | 'tiff-int-wide' | 'tiff-uint16' | 'exr-float' | 'pfm' | 'hdr' | 'npy-float' | 'npy-uint' | 'sgi' | 'tga' | 'webp' | 'avif' | 'bmp' | 'ico' | 'jxl' | 'jxl-float' | 'jxr' | 'jp2' | 'fits' | 'dicom' | 'netcdf' | 'czi' | 'nd2' | 'lif' | 'ndpi' | 'sdt' | 'ora' | 'kra' | 'psd' | 'psb' | 'xcf' | 'affinity';
 
 /** Authored images retain their display range; scientific arrays use their data range. */
 const GAMMA_FORMATS: ReadonlySet<string> = new Set([
   'tiff-int', 'ppm', 'png', 'jpg', 'sgi', 'tga', 'webp', 'avif', 'bmp', 'ico', 'jxl',
   'ora', 'kra', 'psd', 'psb', 'xcf', 'affinity', 'tiff-float', 'pfm', 'hdr',
+  // A scanned slide is an 8-bit colour photograph, not a measurement to stretch.
+  'ndpi',
 ]);
 
 export function defaultDisplaySettings(format?: string): DisplaySettings {

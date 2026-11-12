@@ -23,6 +23,7 @@ import {
   IMAGE_HEADER_PROBE_BYTES,
   ImageHeaderHttpError,
   sniffImageFormat,
+  refineDetectedFormat,
   probeRemoteImage,
   filenameForDetectedFormat,
 } from '../src/util/imageFormatSniffer.js';
@@ -588,7 +589,7 @@ async function openFiles(selected: File[], sourceUrl?: string): Promise<void> {
   const detected = await Promise.all(nextFiles.map(async file => {
     try {
       const prefix = new Uint8Array(await file.slice(0, IMAGE_HEADER_PROBE_BYTES).arrayBuffer());
-      return sniffImageFormat(prefix)?.hint;
+      return refineDetectedFormat(file.name, sniffImageFormat(prefix))?.hint;
     } catch { return undefined; }
   }));
   files.push(...nextFiles.map((file, index) => ({

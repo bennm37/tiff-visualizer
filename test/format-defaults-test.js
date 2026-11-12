@@ -41,6 +41,8 @@ const GAMMA_MODE = [
 	'ora', 'kra', 'psd', 'psb', 'xcf', 'affinity',
 	// Float images conventionally stored in 0..1.
 	'tiff-float', 'pfm', 'hdr',
+	// A scanned slide is an 8-bit colour photograph.
+	'ndpi',
 ];
 
 async function main() {
