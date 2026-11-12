@@ -57,6 +57,10 @@ use formats::hdr::decode_hdr_impl;
 use formats::lif::{decode_lif_impl, decode_lif_sparse};
 #[cfg(feature = "nd2")]
 use formats::nd2::{decode_nd2_impl, decode_nd2_sparse};
+#[cfg(feature = "ndpi")]
+use formats::ndpi::{
+    decode_ndpi_impl, decode_ndpi_sparse, ndpi_layout_json, ndpi_region_plan_json,
+};
 #[cfg(feature = "netcdf")]
 use formats::netcdf::decode_netcdf_impl;
 #[cfg(feature = "netpbm")]
@@ -461,7 +465,8 @@ impl DecodedArray {
     feature = "czi",
     feature = "nd2",
     feature = "lif",
-    feature = "sdt"
+    feature = "sdt",
+    feature = "ndpi"
 ))]
 impl From<formats::scientific_common::ScientificParsed> for DecodedArray {
     fn from(p: formats::scientific_common::ScientificParsed) -> Self {
@@ -1730,6 +1735,105 @@ pub fn decode_lif_ranged(
     Ok(decode_lif_sparse(&file, options_json)?.into())
 }
 
+/// The pieces of a partially read NDPI file: `blob` holds them back to back,
+/// `lengths[i]` bytes each, read from file offset `offsets[i]`. Offsets are
+/// `f64` because slides exceed 4 GiB and `usize` is 32 bits in WebAssembly.
+#[cfg(feature = "ndpi")]
+fn ndpi_pieces<'a>(
+    blob: &'a [u8],
+    offsets: &[f64],
+    lengths: &[u32],
+    file_size: f64,
+) -> Result<formats::ndpi::NdpiFile<'a>, DecodeError> {
+    let as_u64 = |value: f64, what: &str| -> Result<u64, DecodeError> {
+        if value.is_finite()
+            && (0.0..=9_007_199_254_740_992.0).contains(&value)
+            && value.fract() == 0.0
+        {
+            // Checked just above: a non-negative integer a f64 holds exactly.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            Ok(value as u64)
+        } else {
+            Err(DecodeError::new(format!(
+                "Ranged read: invalid {what} {value}"
+            )))
+        }
+    };
+    if offsets.len() != lengths.len() {
+        return Err(DecodeError::new(
+            "Ranged read: offsets and lengths disagree",
+        ));
+    }
+    let mut pieces = Vec::with_capacity(offsets.len());
+    let mut at = 0usize;
+    for (&offset, &length) in offsets.iter().zip(lengths) {
+        let length =
+            usize::try_from(length).map_err(|_| DecodeError::new("Ranged read: piece too long"))?;
+        let end = at
+            .checked_add(length)
+            .filter(|&end| end <= blob.len())
+            .ok_or_else(|| DecodeError::new("Ranged read: pieces exceed the buffer"))?;
+        pieces.push((as_u64(offset, "offset")?, &blob[at..end]));
+        at = end;
+    }
+    Ok(formats::ndpi::NdpiFile::new(
+        as_u64(file_size, "file size")?,
+        pieces,
+    ))
+}
+
+/// Decode a Hamamatsu NDPI slide held whole in memory. `options_json` is
+/// `{ indices?: {S?, Z?}, level?, rect?, maxPixels? }`: `S` 1 selects the
+/// macro image, `Z` a focal plane, and a request without `level` gets the
+/// finest pyramid level within `maxPixels` (40 million by default).
+#[cfg(feature = "ndpi")]
+pub fn decode_ndpi_fast(data: &[u8], options_json: &str) -> Result<DecodedArray, DecodeError> {
+    Ok(decode_ndpi_impl(data, options_json)?.into())
+}
+
+/// `decode_ndpi_fast` on a partially read file (see `ndpi_pieces`). A decode
+/// needing bytes not supplied fails with `[need-range:OFFSET:LENGTH]`.
+#[cfg(feature = "ndpi")]
+pub fn decode_ndpi_ranged(
+    blob: &[u8],
+    offsets: &[f64],
+    lengths: &[u32],
+    file_size: f64,
+    options_json: &str,
+) -> Result<DecodedArray, DecodeError> {
+    let file = ndpi_pieces(blob, offsets, lengths, file_size)?;
+    Ok(decode_ndpi_sparse(&file, options_json)?.into())
+}
+
+/// Size, sample type, pyramid levels and metadata of the image `options_json`
+/// selects in a partially read NDPI file, as JSON. Fails with
+/// `[need-range:OFFSET:LENGTH]` until the directory has been supplied.
+#[cfg(feature = "ndpi")]
+pub fn ndpi_layout(
+    blob: &[u8],
+    offsets: &[f64],
+    lengths: &[u32],
+    file_size: f64,
+    options_json: &str,
+) -> Result<String, DecodeError> {
+    let file = ndpi_pieces(blob, offsets, lengths, file_size)?;
+    ndpi_layout_json(&file, options_json)
+}
+
+/// The byte ranges `decode_ndpi_ranged` will read for the same options, as
+/// JSON `{level, x, y, width, height, ranges: [[offset, length], ...]}`.
+#[cfg(feature = "ndpi")]
+pub fn ndpi_region_plan(
+    blob: &[u8],
+    offsets: &[f64],
+    lengths: &[u32],
+    file_size: f64,
+    options_json: &str,
+) -> Result<String, DecodeError> {
+    let file = ndpi_pieces(blob, offsets, lengths, file_size)?;
+    ndpi_region_plan_json(&file, options_json)
+}
+
 /// Decode a Becker & Hickl SDT TCSPC histogram image. `options_json` selects
 /// the data block, visualization mode, and raw time bin.
 #[cfg(feature = "sdt")]
@@ -1749,6 +1853,8 @@ pub use decode_exr_fast as decode_exr;
 pub use decode_lif_fast as decode_lif;
 #[cfg(feature = "nd2")]
 pub use decode_nd2_fast as decode_nd2;
+#[cfg(feature = "ndpi")]
+pub use decode_ndpi_fast as decode_ndpi;
 #[cfg(feature = "sdt")]
 pub use decode_sdt_fast as decode_sdt;
 #[cfg(feature = "exr")]

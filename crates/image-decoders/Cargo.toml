@@ -33,6 +33,7 @@ all-formats = [
     "nd2",
     "lif",
     "sdt",
+    "ndpi",
     "demosaic",
 ]
 
@@ -96,6 +97,9 @@ czi = ["dep:ruzstd", "dep:weezl", "jpeg"]
 nd2 = []
 lif = []
 sdt = ["dep:flate2"]
+# Hamamatsu whole-slide images: a TIFF-like container of single-strip JPEGs,
+# decoded by the same zune-jpeg the TIFF path uses.
+ndpi = ["jpeg"]
 demosaic = []
 
 [dependencies]

@@ -1316,6 +1316,52 @@ pub fn decode_lif_ranged(
 }
 
 #[wasm_bindgen]
+pub fn decode_ndpi_fast(data: &[u8], options_json: &str) -> Result<DecodedArray, JsValue> {
+    prepare();
+    core::decode_ndpi_fast(data, options_json)
+        .map(Into::into)
+        .map_err(js_error)
+}
+
+#[wasm_bindgen]
+pub fn decode_ndpi_ranged(
+    blob: &[u8],
+    offsets: &[f64],
+    lengths: &[u32],
+    file_size: f64,
+    options_json: &str,
+) -> Result<DecodedArray, JsValue> {
+    prepare();
+    core::decode_ndpi_ranged(blob, offsets, lengths, file_size, options_json)
+        .map(Into::into)
+        .map_err(js_error)
+}
+
+#[wasm_bindgen]
+pub fn ndpi_layout(
+    blob: &[u8],
+    offsets: &[f64],
+    lengths: &[u32],
+    file_size: f64,
+    options_json: &str,
+) -> Result<String, JsValue> {
+    prepare();
+    core::ndpi_layout(blob, offsets, lengths, file_size, options_json).map_err(js_error)
+}
+
+#[wasm_bindgen]
+pub fn ndpi_region_plan(
+    blob: &[u8],
+    offsets: &[f64],
+    lengths: &[u32],
+    file_size: f64,
+    options_json: &str,
+) -> Result<String, JsValue> {
+    prepare();
+    core::ndpi_region_plan(blob, offsets, lengths, file_size, options_json).map_err(js_error)
+}
+
+#[wasm_bindgen]
 pub fn czi_header(head: &[u8]) -> Result<String, JsValue> {
     prepare();
     core::czi_header(head).map_err(js_error)

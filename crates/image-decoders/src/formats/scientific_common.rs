@@ -14,7 +14,8 @@
         feature = "dicom",
         feature = "czi",
         feature = "nd2",
-        feature = "lif"
+        feature = "lif",
+        feature = "ndpi"
     )),
     allow(dead_code)
 )]

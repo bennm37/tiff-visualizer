@@ -28,7 +28,8 @@ pub(crate) mod jpegxr;
     feature = "czi",
     feature = "nd2",
     feature = "lif",
-    feature = "sdt"
+    feature = "sdt",
+    feature = "ndpi"
 ))]
 pub(crate) mod json_value;
 #[cfg(feature = "jxl")]
@@ -49,11 +50,14 @@ pub(crate) mod lif;
     feature = "czi",
     feature = "nd2",
     feature = "lif",
-    feature = "sdt"
+    feature = "sdt",
+    feature = "ndpi"
 ))]
 pub(crate) mod metadata;
 #[cfg(feature = "nd2")]
 pub(crate) mod nd2;
+#[cfg(feature = "ndpi")]
+pub(crate) mod ndpi;
 #[cfg(feature = "netcdf")]
 pub(crate) mod netcdf;
 #[cfg(feature = "netpbm")]
@@ -78,7 +82,8 @@ pub(crate) mod psd;
     feature = "czi",
     feature = "nd2",
     feature = "lif",
-    feature = "sdt"
+    feature = "sdt",
+    feature = "ndpi"
 ))]
 pub(crate) mod scientific_common;
 #[cfg(feature = "sdt")]
