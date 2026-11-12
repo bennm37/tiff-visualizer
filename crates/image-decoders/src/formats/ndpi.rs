@@ -94,7 +94,6 @@ pub(crate) struct NdpiFile<'a> {
 }
 
 impl<'a> NdpiFile<'a> {
-    /// A whole file in memory.
     pub(crate) fn whole(data: &'a [u8]) -> Self {
         Self {
             size: data.len() as u64,
@@ -234,7 +233,6 @@ impl Entry {
         }
     }
 
-    /// The value bytes, wherever they are stored.
     fn bytes(&self, file: &NdpiFile<'_>, context: &str) -> Result<Vec<u8>, DecodeError> {
         let len = self.byte_len();
         if self.is_inline() {
@@ -745,7 +743,6 @@ fn blocks_for(rect: Rect, grid: Grid) -> Blocks {
     }
 }
 
-/// Decoding options, as sent by the viewer.
 struct Options {
     series: usize,
     plane: Option<usize>,
