@@ -52,7 +52,7 @@ import {
 } from './modules/channel-composite.js';
 import { RoiManager } from './modules/measure/roi-manager.js';
 import { RoiOverlay } from './modules/measure/roi-overlay.js';
-import { calibrationFromOme, calibrationFromCzi, calibrationFromNdpi, calibrationFromDicom, calibrationFromTagList } from './modules/measure/calibration.js';
+import { calibrationFromOme, calibrationFromCzi, calibrationFromNdpi, calibrationAtReduction, calibrationFromDicom, calibrationFromTagList } from './modules/measure/calibration.js';
 import { deserializeRoi, parseSidecar, serializeRoi } from './modules/measure/roi-io.js';
 import { toScalarPlane, UNCALIBRATED, type Calibration, type MeasurementSource } from './modules/measure/types.js';
 import type { TagEntry } from './modules/tiff-tag-utils.js';
@@ -880,6 +880,9 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 
 	const roiOverlay = new RoiOverlay(roiManager, {
 		getImageElement: () => imageElement,
+		// A CZI or NDPI scene is measured on its loaded overview level.
+		getImageSize: () => rangedSceneProcessor() && _pyramidScene && canvas
+			? { width: canvas.width, height: canvas.height } : null,
 		getSource: () => getMeasurementSource(),
 		getScalarPlane: () => getScalarPlane(),
 		getCalibration: () => measureCalibration,
@@ -972,8 +975,14 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		// the metadata of the file it decoded last, so without it a DICOM viewed
 		// earlier in the collection would go on calibrating a later TIFF in mm.
 		const dicom = dicomProcessor._lastRaw ? calibrationFromDicom(dicomProcessor.metadata) : null;
-		const czi = cziProcessor._lastRaw ? calibrationFromCzi(cziProcessor.metadata) : null;
-		const ndpi = ndpiProcessor._lastRaw ? calibrationFromNdpi(ndpiProcessor.metadata) : null;
+		// A scene's metadata describes full-resolution pixels; its ROIs are drawn
+		// on the overview level, whose pixels are larger by its reduction.
+		const shownReduction = (processor: any): number =>
+			processor.isScene ? Math.max(1, processor.pageDirectory[processor.pageIndex]?.reduction ?? 1) : 1;
+		const czi = cziProcessor._lastRaw
+			? calibrationAtReduction(calibrationFromCzi(cziProcessor.metadata), shownReduction(cziProcessor)) : null;
+		const ndpi = ndpiProcessor._lastRaw
+			? calibrationAtReduction(calibrationFromNdpi(ndpiProcessor.metadata), shownReduction(ndpiProcessor)) : null;
 		const ome = tiffProcessor.rawTiffData?.ome || null;
 		const fromTags = calibrationFromTagList(tiffProcessor._lastAllTags as TagEntry[] | null);
 		measureCalibration = dicom || czi || ndpi

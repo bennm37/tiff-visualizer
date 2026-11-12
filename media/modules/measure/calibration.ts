@@ -234,10 +234,24 @@ export function calibrationFromCzi(metadata: {
 }
 
 /**
+ * Calibration of a reduced pyramid level from that of the full-resolution
+ * image. ROIs are measured on the raster that is loaded, and each pixel of a
+ * level reduced by `reduction` spans that many full-resolution pixels a side.
+ */
+export function calibrationAtReduction(calibration: Calibration | null, reduction: number): Calibration | null {
+	if (!calibration || !(reduction > 1)) { return calibration; }
+	return {
+		...calibration,
+		pixelWidth: calibration.pixelWidth * reduction,
+		pixelHeight: calibration.pixelHeight * reduction,
+	};
+}
+
+/**
  * Derive calibration from an NDPI slide's resolution tags, which the decoder
  * reports in the same `scalingXUm`/`scalingYUm` fields as CZI: micrometres
  * per pixel of the image as shown (per full-resolution pixel for a slide
- * opened as a pyramid scene).
+ * opened as a pyramid scene; see `calibrationAtReduction`).
  */
 export function calibrationFromNdpi(metadata: Parameters<typeof calibrationFromCzi>[0]): Calibration | null {
 	const calibration = calibrationFromCzi(metadata);

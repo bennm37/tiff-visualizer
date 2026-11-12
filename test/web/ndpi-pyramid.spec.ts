@@ -94,7 +94,7 @@ function flatJpeg(width: number, height: number, restartInterval: number, level:
 }
 
 /** An NDPI file: 8-byte IFD offsets, and a high-bits word per entry after each IFD. */
-function ndpi(images: { jpeg: Buffer, width: number, height: number, lens: number, starts: number[] }[]): Buffer {
+function ndpi(images: { jpeg: Buffer, width: number, height: number, lens: number, starts: number[], pixelsPerCm?: number }[]): Buffer {
   const parts: Buffer[] = [Buffer.alloc(12)];
   parts[0].write('II*\0', 0, 'latin1');
   let size = 12;
@@ -109,6 +109,14 @@ function ndpi(images: { jpeg: Buffer, width: number, height: number, lens: numbe
       [273, 4, 1, strip], [277, 3, 1, 1], [278, 4, 1, image.height], [279, 4, 1, image.jpeg.length],
       [65420, 4, 1, 1], [65421, 11, 1, lens.readUInt32LE(0)], [65424, 9, 1, 0],
     ];
+    if (image.pixelsPerCm) {
+      const resolution = Buffer.alloc(8);
+      resolution.writeUInt32LE(image.pixelsPerCm, 0);
+      resolution.writeUInt32LE(1, 4);
+      const at = append(resolution);
+      entries.push([282, 5, 1, at], [283, 5, 1, at], [296, 3, 1, 3]);
+      entries.sort((a, b) => a[0] - b[0]);
+    }
     if (image.starts.length) {
       const table = Buffer.alloc(image.starts.length * 4);
       image.starts.forEach((start, index) => table.writeUInt32LE(start, index * 4));
@@ -137,8 +145,9 @@ function sparseSlide(): Buffer {
   const full = flatJpeg(4608, 4096, 16, (blockX, blockY) => grey(blockX * 8, blockY * 8), starts);
   const quarter = flatJpeg(1152, 1024, 0, (blockX, blockY) => grey(blockX * 32, blockY * 32), []);
   return ndpi([
-    { jpeg: full, width: 4608, height: 4096, lens: 20, starts },
-    { jpeg: quarter, width: 1152, height: 1024, lens: 5, starts: [] },
+    // 20000 pixels per centimetre: 0.5 um per full-resolution pixel.
+    { jpeg: full, width: 4608, height: 4096, lens: 20, starts, pixelsPerCm: 20000 },
+    { jpeg: quarter, width: 1152, height: 1024, lens: 5, starts: [], pixelsPerCm: 5000 },
   ]);
 }
 
@@ -172,6 +181,60 @@ test('a large NDPI slide opens as a pyramid scene and refines on zoom', async ({
     return { x: x + 5, y: y + 5, value: pixel[0] };
   }, 4608);
   expect(Math.abs(sample.value - grey(sample.x, sample.y))).toBeLessThanOrEqual(2);
+  expect(errors).toEqual([]);
+});
+
+test('ROIs draw on an NDPI scene and measure in its calibrated units', async ({ page }, testInfo) => {
+  const file = testInfo.outputPath('sparse-slide.ndpi');
+  fs.writeFileSync(file, sparseSlide());
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/');
+  await page.locator('#web-file-input').setInputFiles(file);
+  const scene = page.locator('.pyramid-scene');
+  await expect(scene).toBeVisible({ timeout: 15000 });
+  await page.evaluate(() => window.postMessage({ type: 'toggleMeasure' }, '*'));
+  const panel = page.locator('.measure-panel');
+  await expect(panel).toBeVisible();
+
+  // An ROI lives on the loaded 1/4 overview (1152x1024). Each of its pixels
+  // is 2 um wide, so 100x50 pixels measure 200 um x 100 um.
+  const roi = { kind: 'rect', id: 'known', name: 'Known', x: 400, y: 300, width: 100, height: 50 };
+  await page.evaluate(roi => window.postMessage({
+    type: 'measureImportResult', kind: 'sidecar',
+    bytes: Array.from(new TextEncoder().encode(JSON.stringify({ version: 1, rois: [roi] }))),
+  }, '*'), roi);
+  await panel.locator('.measure-tab').getByText('Results', { exact: true }).click();
+  const row = panel.locator('.measure-results-wrapper tbody tr');
+  await expect(row).toHaveCount(1);
+  await expect(row.locator('td').nth(3)).toHaveText('600');
+
+  // The outline is painted where that rectangle lies on the scene.
+  const painted = (inside: boolean) => page.evaluate(({ roi, inside }) => {
+    const sceneRect = document.querySelector('.pyramid-scene')!.getBoundingClientRect();
+    const overlay = document.querySelector('canvas.measure-overlay') as HTMLCanvasElement;
+    const overlayRect = overlay.getBoundingClientRect();
+    const scaleX = overlay.width / overlayRect.width, scaleY = overlay.height / overlayRect.height;
+    const clientX = sceneRect.left + ((inside ? roi.x + roi.width / 2 : roi.x) / 1152) * sceneRect.width;
+    const clientY = sceneRect.top + ((roi.y + roi.height / 2) / 1024) * sceneRect.height;
+    const data = overlay.getContext('2d')!.getImageData(
+      Math.round((clientX - overlayRect.left) * scaleX) - 3, Math.round((clientY - overlayRect.top) * scaleY) - 3, 7, 7).data;
+    let opaque = 0;
+    for (let index = 3; index < data.length; index += 4) { if (data[index] > 200) { opaque++; } }
+    return opaque;
+  }, { roi, inside });
+  await expect.poll(() => painted(false)).toBeGreaterThan(0);
+
+  // Drawing with the pointer adds an ROI too.
+  await panel.locator('.measure-tab').getByText('Tools', { exact: true }).click().catch(() => undefined);
+  await panel.getByRole('button', { name: 'Rect', exact: true }).click();
+  const box = (await scene.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.7, { steps: 5 });
+  await page.mouse.up();
+  await panel.locator('.measure-tab').getByText('Results', { exact: true }).click();
+  await expect(row).toHaveCount(2);
   expect(errors).toEqual([]);
 });
 

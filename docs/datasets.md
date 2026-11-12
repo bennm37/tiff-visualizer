@@ -166,7 +166,10 @@ in µm need no setup. The metadata panel lists the objective magnification,
 the focal-plane offsets in nanometres and the scanner's own property list.
 
 Histograms, layer operations and exports of a slide shown as a pyramid use the
-loaded overview, as for large TIFFs. Opening a slide from a URL downloads it
+loaded overview, as for large TIFFs. So do [measurements](./measure.md): ROIs
+are drawn on the overview level and their coordinates and pixel statistics are
+in its pixels, while lengths and areas are reported in micrometres using the
+overview's pixel size. The same applies to CZI mosaics shown as a pyramid. Opening a slide from a URL downloads it
 first; only local files are read in parts.
 
 ## NetCDF

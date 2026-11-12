@@ -939,6 +939,17 @@ async function main() {
 
 	console.log('\n📏 Calibration');
 
+	await test('a reduced pyramid level has proportionally larger pixels', () => {
+		const full = calibration.calibrationFromNdpi({ scalingXUm: 0.5, scalingYUm: 0.25 });
+		assert.strictEqual(full.origin, 'ndpi');
+		const quarter = calibration.calibrationAtReduction(full, 4);
+		close(quarter.pixelWidth, 2, 1e-12, 'pixel width');
+		close(quarter.pixelHeight, 1, 1e-12, 'pixel height');
+		assert.strictEqual(quarter.unit, 'µm');
+		assert.strictEqual(calibration.calibrationAtReduction(full, 1), full);
+		assert.strictEqual(calibration.calibrationAtReduction(null, 4), null);
+	});
+
 	await test('TIFF resolution tags become a pixel size', () => {
 		const result = calibration.calibrationFromTiffTags({ t282: 300, t283: 300, t296: 2 });
 		close(result.pixelWidth, 1 / 300, 1e-12, 'pixel width');

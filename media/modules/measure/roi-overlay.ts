@@ -41,6 +41,12 @@ export type MeasureTool =
 export interface OverlayHost {
 	/** The <canvas>/<img> currently showing the image, or null while loading. */
 	getImageElement: () => HTMLElement | null;
+	/**
+	 * Pixel size of the raster ROIs are drawn on, when the image element cannot
+	 * say. A pyramid scene is a container of canvases at several resolutions
+	 * with no intrinsic size of its own; its ROIs live on the loaded overview.
+	 */
+	getImageSize?: () => { width: number; height: number } | null;
 	/** Raw image for wand/livewire; null when no measurable image is loaded. */
 	getSource: () => MeasurementSource | null;
 	/** Scalar view of the image, cached by the caller. */
@@ -430,6 +436,8 @@ export class RoiOverlay {
 	private naturalSize(): { width: number; height: number } | null {
 		const element = this.host.getImageElement() as (HTMLElement & { naturalWidth?: number; width?: number }) | null;
 		if (!element) { return null; }
+		const declared = this.host.getImageSize?.();
+		if (declared && declared.width > 0 && declared.height > 0) { return declared; }
 		const width = element.naturalWidth || element.width || 0;
 		const height = (element as unknown as { naturalHeight?: number; height?: number }).naturalHeight
 			|| (element as unknown as { height?: number }).height || 0;
