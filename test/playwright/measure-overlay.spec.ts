@@ -47,6 +47,18 @@ function bundleManager(): string {
 	}).outputFiles[0].text;
 }
 
+function bundleViewExport(): string {
+	return buildSync({
+		entryPoints: [path.join(ROOT, 'media', 'modules', 'view-export.ts')],
+		bundle: true,
+		write: false,
+		format: 'iife',
+		globalName: 'ViewExportTest',
+		platform: 'browser',
+		target: 'chrome100',
+	}).outputFiles[0].text;
+}
+
 /**
  * Reproduce the webview's DOM exactly: body carries the container classes and
  * the image canvas is its only child. Getting this wrong would make the test
@@ -341,4 +353,41 @@ test('nothing is painted while the overlay is inactive', async ({ page }) => {
 	const [r, g, b] = await pixelAt(page, centre.x, centre.y);
 	expect(Math.abs(r - g), `inactive overlay tinted the image: rgb(${r}, ${g}, ${b})`).toBeLessThan(10);
 	expect(Math.abs(g - b)).toBeLessThan(10);
+});
+
+test('an exported view contains the image, the ROIs and the scale bar as the viewer shows them', async ({ page }) => {
+	await setupPage(page);
+	await page.addScriptTag({ content: bundleViewExport() });
+	const result = await page.evaluate(() => {
+		const w = window as any;
+		w.__calibration = { pixelWidth: 0.5, pixelHeight: 0.5, unit: 'µm', origin: 'tags' };
+		w.__overlay.setShowScaleBar(true);
+		w.__manager.add({ id: 'r1', name: 'R1', kind: 'rect', x: 20, y: 20, width: 160, height: 110, color: '#ffd400' });
+		const { viewFrame, createViewCanvas, paintView, paintElementPixels, frameScaleBarPainter } = w.ViewExportTest;
+		const image = w.__imageElement as HTMLCanvasElement;
+		const box = image.getBoundingClientRect();
+		const frame = viewFrame({ left: box.left, top: box.top, width: box.width, height: box.height }, { width: innerWidth, height: innerHeight });
+		const capture = (overlays: boolean, scaleBar: boolean) => {
+			const created = createViewCanvas(frame, 1);
+			const painters = [(ctx: CanvasRenderingContext2D) => paintElementPixels(ctx, image)];
+			if (overlays) { painters.push((ctx: CanvasRenderingContext2D) => w.__overlay.paintForExport(ctx)); }
+			const bar = scaleBar ? w.__overlay.scaleBarForExport() : null;
+			if (bar) { painters.push(frameScaleBarPainter(bar)); }
+			paintView(created.ctx, frame, created.size.scale, painters);
+			const ctx = created.ctx as CanvasRenderingContext2D;
+			const pixel = (x: number, y: number) => Array.from(ctx.getImageData(x, y, 1, 1).data).join(',');
+			const data = ctx.getImageData(0, 100, 200, 50).data;
+			let white = 0;
+			for (let at = 0; at < data.length; at += 4) { if (data[at] === 255 && data[at + 1] === 255 && data[at + 2] === 255) { white++; } }
+			return { width: created.canvas.width, height: created.canvas.height, centre: pixel(100, 75), roiEdge: pixel(100, 20), white };
+		};
+		return { full: capture(true, true), plain: capture(false, false), hasBar: w.__overlay.scaleBarForExport() !== null };
+	});
+	expect([result.full.width, result.full.height]).toEqual([200, 150]);
+	expect(result.hasBar).toBe(true);
+	expect(result.full.centre).toBe('128,128,128,255');
+	expect(result.full.roiEdge).toBe('255,212,0,255');
+	expect(result.full.white).toBeGreaterThan(20);
+	expect(result.plain.roiEdge).toBe('128,128,128,255');
+	expect(result.plain.white).toBe(0);
 });

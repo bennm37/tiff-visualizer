@@ -118,6 +118,7 @@ test.describe('Offline TIFF Visualizer Extension Tests', () => {
     const requiredCommands = [
       'tiffVisualizer.zoomIn',
       'tiffVisualizer.zoomOut',
+      'tiffVisualizer.copyView',
       'tiffVisualizer.copyImage',
       'tiffVisualizer.resetZoom',
       'tiffVisualizer.setNormalizationRange',

@@ -58,6 +58,7 @@ test.describe('TIFF Visualizer Extension Core Tests', () => {
     const requiredCommands = [
       'tiffVisualizer.zoomIn',
       'tiffVisualizer.zoomOut',
+      'tiffVisualizer.copyView',
       'tiffVisualizer.copyImage',
       'tiffVisualizer.resetZoom',
       'tiffVisualizer.setNormalizationRange',
