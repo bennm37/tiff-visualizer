@@ -53,6 +53,7 @@ import {
 import { RoiManager } from './modules/measure/roi-manager.js';
 import { RoiOverlay } from './modules/measure/roi-overlay.js';
 import { readBottomInset } from './modules/scale-bar.js';
+import { clipboardFailure, installFocusClaim, whenFocused } from './modules/viewer-focus.js';
 import {
 	DEFAULT_VIEW_OPTIONS, blobToBase64, canvasToPng, createViewCanvas, frameScaleBarPainter, paintElementPixels, paintView, viewFrame,
 	type ExportSize, type ViewOptions, type ViewPainter,
@@ -5146,6 +5147,8 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 			if (e.target instanceof HTMLSelectElement) { e.target.blur(); }
 		}, true);
 
+		installFocusClaim();
+
 		// Copy handling
 		document.addEventListener('copy', (e) => {
 			if (isEditableEventTarget(e.target)) { return; }
@@ -7609,12 +7612,6 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		});
 	}
 
-	/** Run `action` once the webview has focus, which the clipboard needs; give up waiting after a second. */
-	function whenFocused(action: () => void, attempts = 50): void {
-		if (document.hasFocus() || attempts <= 0) { action(); return; }
-		setTimeout(() => whenFocused(action, attempts - 1), 20);
-	}
-
 	/**
 	 * Remember where the view is, relative to the image, so Paste Position can
 	 * put another image (of any size) at the same place and zoom.
@@ -7677,7 +7674,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 				showNotification('View copied to clipboard. Paste Position applies it to another image.', 'success');
 			} catch (e) {
 				console.error('Copy view failed:', e);
-				showNotification(`Failed to copy view: ${(e as any).message}`, 'error');
+				showNotification(clipboardFailure(e, 'view'), 'error');
 			}
 		});
 	}
@@ -7733,7 +7730,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 				showNotification('Image copied to clipboard', 'success');
 			} catch (e) {
 				console.error('Copy failed:', e);
-				showNotification(`Failed to copy image: ${(e as any).message}`, 'error');
+				showNotification(clipboardFailure(e, 'image'), 'error');
 			}
 		});
 	}

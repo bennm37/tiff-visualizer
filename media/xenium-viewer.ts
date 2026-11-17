@@ -26,6 +26,7 @@ import { SceneViewer } from './modules/scene/scene-viewer.js';
 import type { Camera } from './modules/scene/pyramid.js';
 import { omeChannelHints, purposeTint, type SceneManifest } from './modules/scene/xenium-manifest.js';
 import type { ScaleBarPosition } from './modules/scale-bar.js';
+import { clipboardFailure, installFocusClaim, whenFocused } from './modules/viewer-focus.js';
 import { DEFAULT_VIEW_OPTIONS, blobToBase64, canvasToPng, type ViewOptions } from './modules/view-export.js';
 import type { ChannelDefaults } from '../shared/viewer-settings';
 
@@ -284,7 +285,7 @@ function notify(text: string, kind: 'success' | 'error'): void {
 function copyView(): void {
 	if (!viewer) { notify('No scene loaded to copy', 'error'); return; }
 	const scene = viewer;
-	void (async () => {
+	whenFocused(() => void (async () => {
 		try {
 			// The clipboard item takes the capture as a promise, so the browser keeps its permission while the tiles settle.
 			await navigator.clipboard.write([new ClipboardItem({
@@ -295,9 +296,9 @@ function copyView(): void {
 			})]);
 			notify('View copied to clipboard', 'success');
 		} catch (error) {
-			notify(`Failed to copy view: ${error instanceof Error ? error.message : String(error)}`, 'error');
+			notify(clipboardFailure(error, 'view'), 'error');
 		}
-	})();
+	})());
 }
 
 /** Answer the host's request for the current view as PNG data, for the export dialog. */
@@ -373,6 +374,8 @@ document.addEventListener('contextmenu', event => {
 	items.push(defer('Open as Text', () => vscode.postMessage({ type: 'openAsText' })));
 	openContextMenu(items, event.clientX, event.clientY);
 });
+
+installFocusClaim();
 
 document.addEventListener('copy', event => {
 	const target = event.target as HTMLElement | null;
