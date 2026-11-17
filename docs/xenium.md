@@ -16,6 +16,7 @@ Controls follow `tiffVisualizer.scrollToZoom`, off by default, just like the ord
 - On: the wheel zooms about the pointer, dragging pans, and double-click fits. A click still selects a cell without zooming.
 - Use **Scientific Image Visualizer: Toggle Scroll to Zoom** to switch the setting. Open Xenium viewers update immediately, including when the setting changes in Settings.
 - A scale bar is drawn at the lower left of the tissue image from the bundle's pixel size. **Scientific Image Visualizer: Toggle Scale Bar** shows or hides it; the choice is shared with the image viewer for the session. Drag the bar to move it (it stays at its place in the image) and double-click it to restore the automatic placement. Set `tiffVisualizer.scaleBar.anchorToImage` to `false` to keep the bar fixed in the viewer instead; see [Measure](measure.md#the-scale-bar).
+- **Export…** (`Ctrl`/`Cmd` + `S`) offers **Current view (PNG)**: the part of the tissue on screen with the cell outlines, transcripts and scale bar shown, once its tiles have loaded. `Ctrl`/`Cmd` + `C` or **Copy View** puts the same picture on the clipboard. See [export](./export.md).
 - In either mode, `0` or **Fit to View** fits, `+`/`-` zoom, arrow keys pan, and `c` toggles the Channels panel. Trackpad pinch reported as Ctrl+wheel zooms in either mode.
 
 ## Current limits
@@ -36,6 +37,7 @@ Controls follow `tiffVisualizer.scrollToZoom`, off by default, just like the ord
 | Manifest and OME hints | `media/modules/scene/xenium-manifest.ts` |
 | Pyramid geometry | `media/modules/scene/pyramid.ts` |
 | Scene viewer | `media/modules/scene/scene-viewer.ts` |
+| View export (shared with the image viewer) | `media/modules/view-export.ts` |
 | Cell table, outlines, drawing, controller | `media/modules/cells/` |
 | Cells section components | `ui/components/cells/` |
 | Xenium cell and transcript loader and worker | `media/modules/scene/xenium-cells.ts`, `media/xenium-cells-worker.ts` |

@@ -80,6 +80,9 @@ These are active when a Scientific Image Visualizer tab has focus:
 | `Ctrl`/`Cmd` + `M` | Toggle metadata panel |
 | `Ctrl`/`Cmd` + `Shift` + `M` | Toggle measure panel |
 | `Ctrl`/`Cmd` + `Shift` + `I` | Copy image information to clipboard |
+| `Ctrl`/`Cmd` + `C` | Copy the current view, and remember its position for Paste Position |
+| `Ctrl`/`Cmd` + `Shift` + `C` | Copy the whole image |
+| `Ctrl`/`Cmd` + `S` | Export… (the current view is the first choice; also in the Xenium viewer) |
 | `←` / `→` | Step through the dataset, collection, or TIFF pages (see below) |
 | `[` / `]` or `PageUp` / `PageDown` | Previous / next page of a multi-page TIFF, or CZI channel |
 

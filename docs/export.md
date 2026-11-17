@@ -4,11 +4,13 @@
 
 ## Export…
 
-The **Export…** command writes the current image or layer stack. Targets:
+The **Export…** command (`Ctrl`/`Cmd` + `S` while a viewer tab has focus) writes
+the current view, image or layer stack. Targets:
 
 | Format | What it writes |
 | --- | --- |
-| **PNG** | The rendered image as displayed — normalization, gamma, brightness and colormap baked in |
+| **Current view (PNG)** | What is on screen: the visible part of the image with its cells, transcripts, ROIs and scale bar. The first entry, and the default |
+| **PNG** | The whole rendered image as displayed — normalization, gamma, brightness and colormap baked in |
 | **OpenRaster (.ora)** | Layer stack, open standard, opens in Krita and GIMP |
 | **GIMP 3 XCF (.xcf)** | Layer stack for GIMP 3 |
 | **Krita (.kra)** | Layer stack for Krita |
@@ -24,11 +26,50 @@ Export correctness is referenced against the synchronous CPU compositing path,
 so an exported composite matches the CPU render regardless of which GPU backend
 was driving your screen.
 
+## Current view
+
+**Current view (PNG)** exports the part of the image you are looking at, cut to
+the window: pan and zoom to a region, then export it. It works in the image
+viewer and in the Xenium viewer, where it includes the cell outlines and
+transcripts on screen.
+
+After you choose it, a short list asks what to include. Cells, transcripts and
+ROIs, and the scale bar, are ticked; untick either to leave it out. **Double
+resolution (2×)** writes twice the screen pixels, which makes outlines, text and
+the scale bar sharper for a figure. The picture itself is not re-read at a finer
+level, so image pixels are enlarged rather than more detailed.
+
+The viewer's own controls (readouts, the histogram, panels) and the selection
+and hover highlights on ROIs are not part of the export. In the Xenium viewer
+the export waits for the tiles of the current view to arrive, so it is not a
+blurred preview.
+
+The standalone web viewer downloads the same PNG when you press `Ctrl`/`Cmd` +
+`S` or choose **Export current view**.
+
+## Copy View
+
+**Copy View** (`Ctrl`/`Cmd` + `C`) puts the same picture on the clipboard, with
+the cells, ROIs and scale bar as shown. It also remembers where the view is, so
+**Paste Position** on another image, or in another tab, puts that image at the
+same place and zoom. Copy a view of one image, switch to a second image of the
+same scene and paste, to compare the two at the same spot.
+
 ## Copy Image
 
-**Copy Image** puts the rendered image on the clipboard, ready to paste into a
-document, chat or issue. Same rule as PNG export: what you see is what you get,
-including the current display settings.
+**Copy Image** (`Ctrl`/`Cmd` + `Shift` + `C`) puts the whole image on the
+clipboard at its own resolution, without the view, the overlays or the scale
+bar, ready to paste into a document, chat or issue. Same rule as PNG export:
+what you see is what you get, including the current display settings. It does
+not change the position that Paste Position uses.
+
+### Shortcuts that VS Code also uses
+
+`Ctrl`/`Cmd` + `S` is VS Code's Save and `Ctrl`/`Cmd` + `Shift` + `C` opens a
+new terminal window in VS Code by default. These viewers have nothing to save, and the shortcuts apply only
+while a viewer tab has focus, so they take precedence there and nowhere else. To
+use different keys, rebind **Export…** or **Copy Image** in Keyboard Shortcuts
+(`Ctrl`/`Cmd` + `K`, `Ctrl`/`Cmd` + `S`).
 
 ## Copy Image Information
 
@@ -71,6 +112,7 @@ handoff.
 
 ## Paste Position
 
-**Paste Position** reads a coordinate from the clipboard and moves the view
-there. Combined with copying a pixel position, this is how two people compare
-notes about the same location in the same file.
+**Paste Position** applies the position saved by the last **Copy View**: the
+same place in the image, at the same zoom, scaled to the size of the image you
+paste it into. It works across tabs, so it is how you compare two images, or two
+people compare notes, at the same location.

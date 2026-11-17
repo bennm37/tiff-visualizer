@@ -22,8 +22,10 @@ switch is intentionally unavailable there.
 text summary of the current image: dimensions, format, bit depth, channels and
 statistics. It is the fastest way to paste context into an issue or a message.
 
-**Paste Position** takes a coordinate from the clipboard and moves the view to
-it, which is how you get two people looking at the same pixel of the same file.
+**Copy View** (`Ctrl`/`Cmd` + `C`) copies the visible part of the image, with its
+overlays, and remembers the position. **Paste Position** applies that position to
+another image, so both show the same place at the same zoom. See
+[export](./export.md).
 
 ## Zoom and pan
 
