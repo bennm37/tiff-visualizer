@@ -143,6 +143,11 @@
         "category": "Scientific Image Visualizer"
       },
       {
+        "command": "tiffVisualizer.copyView",
+        "title": "Copy View",
+        "category": "Scientific Image Visualizer"
+      },
+      {
         "command": "tiffVisualizer.copyImage",
         "title": "Copy Image",
         "category": "Scientific Image Visualizer"
@@ -332,6 +337,18 @@
         "key": "ctrl+shift+i",
         "mac": "cmd+shift+i",
         "when": "activeCustomEditorId == 'tiffVisualizer.previewEditor'"
+      },
+      {
+        "command": "tiffVisualizer.copyImage",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "activeCustomEditorId == 'tiffVisualizer.previewEditor'"
+      },
+      {
+        "command": "tiffVisualizer.exportLayers",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeCustomEditorId == 'tiffVisualizer.previewEditor' || activeCustomEditorId == 'tiffVisualizer.xeniumViewer'"
       }
     ],
     "menus": {

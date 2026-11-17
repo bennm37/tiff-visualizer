@@ -21,6 +21,7 @@
     </nav>
     <div class="web-more-menu" id="web-more-menu" hidden>
       <button type="button" data-web-action="install">Install app…</button>
+      <button type="button" data-web-command="tiffVisualizer.copyView">Copy view</button>
       <button type="button" data-web-command="tiffVisualizer.copyImage">Copy image</button>
       <button type="button" data-web-command="tiffVisualizer.exportLayers">Export current view</button>
       <button type="button" data-web-command="tiffVisualizer.openAsPointCloud" data-web-point-cloud hidden>Open as point cloud</button>

@@ -1,5 +1,6 @@
 import { getCellIdColumns } from '../cells/cellIdColumns';
-import type { HostToViewerMessage } from '../../shared/viewer-protocol';
+import type { HostToViewerMessage, ViewExportOptions } from '../../shared/viewer-protocol';
+import { ViewCaptureChannel, type ViewCaptureResult } from './viewCapture';
 import type { ChannelDefaults } from '../../shared/viewer-settings';
 import * as vscode from 'vscode';
 import type { NanColorName } from './imageSettings';
@@ -113,6 +114,8 @@ export class ImagePreview extends MediaPreview {
 	public readonly onDidGetLayerExportCompatibility = this._onDidGetLayerExportCompatibility.event;
 	private readonly _onDidExportLayerDocument = this._register(new vscode.EventEmitter<LayerExportResult>());
 	public readonly onDidExportLayerDocument = this._onDidExportLayerDocument.event;
+
+	private readonly _viewCapture = new ViewCaptureChannel(message => this.postViewerMessage(message));
 
 	private _openTimestamp: number = 0;
 	/** The sources the page may still request (its first image, recent switches), by token. */
@@ -316,6 +319,7 @@ export class ImagePreview extends MediaPreview {
 			this._layersStatusBarEntry.hide();
 			this._histogramStatusBarEntry.hide();
 		}
+		this._viewCapture.dispose();
 		super.dispose();
 	}
 
@@ -339,6 +343,23 @@ export class ImagePreview extends MediaPreview {
 		if (this.previewState === PreviewState.Active) {
 			this.postViewerMessage({ type: 'copyImage' });
 		}
+	}
+
+	public copyView() {
+		if (this.previewState === PreviewState.Active) {
+			this.postViewerMessage({ type: 'copyView' });
+		}
+	}
+
+	public get exportSource(): vscode.Uri { return this.resource; }
+
+	public async captureView(options: ViewExportOptions): Promise<ViewCaptureResult> {
+		if (this.previewState !== PreviewState.Active) { return { error: 'The image is not shown right now.' }; }
+		return this._viewCapture.capture(options);
+	}
+
+	public receiveViewCapture(message: Parameters<ViewCaptureChannel['receive']>[0]): void {
+		this._viewCapture.receive(message);
 	}
 
 	public pastePosition() {

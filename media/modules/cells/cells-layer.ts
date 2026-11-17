@@ -142,7 +142,7 @@ export class CellsLayer {
 	}
 
 	/** Scene overlay entry point. */
-	draw(context: CanvasRenderingContext2D, _camera: unknown, scale: number): void {
+	draw(context: CanvasRenderingContext2D, _camera: unknown, scale: number, complete = false): void {
 		const primary = this.primary();
 		if (!primary) { return; }
 		const visible = this.visibleRect(context);
@@ -153,8 +153,8 @@ export class CellsLayer {
 			this.paintOutlines(context, primary, polygons, scale, 1 / scale, 0, this.show === 'both' ? this.nuclei : null);
 			this.lastStats = { drawn: 0, painted: 0, pending: 0, fallback: 0 };
 		} else {
-			this.lastStats = this.tiles.draw(context, scale, visible, TILE_BUDGET_MS);
-			if (this.lastStats.pending > 0) { this.options.invalidate(); }
+			this.lastStats = this.tiles.draw(context, scale, visible, complete ? Infinity : TILE_BUDGET_MS);
+			if (this.lastStats.pending > 0 && !complete) { this.options.invalidate(); }
 		}
 		this.drawSelection(context, primary, scale);
 		context.restore();

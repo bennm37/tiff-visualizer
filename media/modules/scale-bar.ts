@@ -174,7 +174,7 @@ export function paintScaleBar(ctx: CanvasRenderingContext2D, placement: ScaleBar
 }
 
 /** The CSS variable a host sets to keep the bar above its own fixed chrome (the standalone site's status bar). */
-function readBottomInset(): number {
+export function readBottomInset(): number {
 	const configured = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--measure-scale-bar-bottom-inset'));
 	return Number.isFinite(configured) ? Math.max(0, configured) : 0;
 }

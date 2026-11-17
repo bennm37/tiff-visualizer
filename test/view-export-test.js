@@ -8,7 +8,8 @@ function load(file) {
 	return loaded.exports;
 }
 
-const { viewFrame, exportSize, paintView, frameScaleBarPlacement, viewFileName, MAX_EXPORT_AXIS } = load('media/modules/view-export.ts');
+const { viewFrame, exportSize, paintView, frameScaleBarPlacement, MAX_EXPORT_AXIS } = load('media/modules/view-export.ts');
+const { viewFileName, ViewCaptureChannel } = load('src/imagePreview/viewCapture.ts');
 
 function recorder() {
 	const calls = [];
@@ -70,4 +71,25 @@ testSizeAndLimits();
 testPaintOrderAndIsolation();
 testScaleBarFollowsTheFrame();
 testFileName();
-console.log('view-export tests passed');
+
+async function testCaptureChannel() {
+	const posted = [];
+	const channel = new ViewCaptureChannel(message => posted.push(message), 50);
+	const first = channel.capture({ scale: 1, overlays: true, scaleBar: true });
+	const second = channel.capture({ scale: 2, overlays: false, scaleBar: false });
+	assert.deepEqual(posted.map(message => message.requestId), [1, 2], 'each request has its own id');
+	assert.equal(posted[1].options.scale, 2, 'the options travel with the request');
+	channel.receive({ requestId: 2, payload: 'AAAA', width: 10, height: 5, scale: 2 });
+	channel.receive({ requestId: 1, error: 'Nothing of the image is in view to export.' });
+	assert.deepEqual(await second, { payload: 'AAAA', width: 10, height: 5, scale: 2 }, 'answers are matched by id, not by order');
+	assert.deepEqual(await first, { error: 'Nothing of the image is in view to export.' }, 'an error answer is passed on');
+	channel.receive({ requestId: 99, payload: 'x' });
+	const silent = new ViewCaptureChannel(() => { }, 20).capture({ scale: 1, overlays: true, scaleBar: true });
+	assert.ok('error' in await silent, 'a viewer that never answers times out instead of hanging the command');
+	const closing = new ViewCaptureChannel(() => { }, 5000);
+	const waiting = closing.capture({ scale: 1, overlays: true, scaleBar: true });
+	closing.dispose();
+	assert.deepEqual(await waiting, { error: 'The viewer was closed.' }, 'closing the viewer releases a waiting command');
+}
+
+testCaptureChannel().then(() => console.log('view-export tests passed'));

@@ -41,6 +41,9 @@ export class ImageCells {
 	hasWorkspace(): boolean { return this.workspace !== null; }
 	redraw(): void { this.overlay.scheduleRedraw(); }
 
+	/** Paint the visible cell layers into an export. `context` is in viewport pixels. */
+	paintForExport(context: CanvasRenderingContext2D): void { this.overlay.paintForExport(context); }
+
 	/** Tell the panel which file is open. Cells belong to a file, so a different one starts clean. */
 	setResource(resource: string): void {
 		if (resource === this.resource) { return; }

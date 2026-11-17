@@ -149,11 +149,3 @@ export async function blobToBase64(blob: Blob): Promise<string> {
 	for (let at = 0; at < bytes.length; at += 0x8000) { binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000)); }
 	return btoa(binary);
 }
-
-/** `<name>.view.png` next to the source, or the plain default for an unnamed source. */
-export function viewFileName(source: string, scale = 1): string {
-	const base = source.split(/[\\/]/).pop() || 'image';
-	const dot = base.lastIndexOf('.');
-	const stem = dot > 0 ? base.slice(0, dot) : base;
-	return `${stem}.view${scale > 1 ? '@2x' : ''}.png`;
-}

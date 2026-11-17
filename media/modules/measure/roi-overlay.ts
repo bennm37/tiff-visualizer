@@ -13,6 +13,7 @@ import type { RoiManager } from './roi-manager.js';
 import { brushStroke, gradientMagnitude, growRegion, growRegionAuto, traceBoundary } from './segmentation.js';
 import { formatNumber } from './calibration.js';
 import { ScaleBarControl, type ScaleBarPosition } from '../scale-bar.js';
+import type { FrameScaleBarInput } from '../view-export.js';
 import {
 	isAreaKind,
 	isLineKind,
@@ -536,8 +537,7 @@ export class RoiOverlay {
 		if (this.showScaleBar) { this.drawScaleBar(ctx, rect); }
 	}
 
-	private drawRoi(ctx: CanvasRenderingContext2D, roi: Roi, selected: boolean): void {
-		const hovered = this.hoveredRoiId === roi.id;
+	private drawRoi(ctx: CanvasRenderingContext2D, roi: Roi, selected: boolean, hovered = this.hoveredRoiId === roi.id): void {
 		// The ROI keeps its own colour in every state. Colour identifies the
 		// object — replacing it on hover throws that away exactly when the user
 		// is trying to match a table row to a shape. Emphasis comes from a white
@@ -881,6 +881,46 @@ export class RoiOverlay {
 		ctx.arc(client.x, client.y, this.brushRadius * this.pixelScale(), 0, Math.PI * 2);
 		ctx.stroke();
 		ctx.restore();
+	}
+
+	/**
+	 * Paint the segmentation preview and the visible ROIs for an export. The
+	 * context is in viewport pixels, like the live canvas. Selection, hover and
+	 * the shape being drawn are interaction state, not part of the image, so
+	 * they are left out.
+	 */
+	paintForExport(ctx: CanvasRenderingContext2D): void {
+		const rect = this.imageRect();
+		if (!rect) { return; }
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect(rect.left, rect.top, rect.width, rect.height);
+		ctx.clip();
+		const previewCanvas = this.showMask ? this.ensureMaskPreviewCanvas() : null;
+		if (previewCanvas) {
+			ctx.imageSmoothingEnabled = false;
+			ctx.drawImage(previewCanvas, rect.left, rect.top, rect.width, rect.height);
+			ctx.imageSmoothingEnabled = true;
+		}
+		if (this.showRois) {
+			for (const roi of this.manager.list()) { this.drawRoi(ctx, roi, false, false); }
+		}
+		ctx.restore();
+	}
+
+	/** What an export needs to place the scale bar as the viewer does, or null when no bar is showing. */
+	scaleBarForExport(): FrameScaleBarInput | null {
+		const rect = this.imageRect();
+		if (!rect || !this.naturalSize() || !this.showScaleBar || !(this.active || this.scaleBarWhenIdle)) { return null; }
+		const calibration = this.host.getCalibration();
+		if (calibration.origin === 'none') { return null; }
+		return {
+			pixelScale: this.pixelScale(),
+			calibration,
+			imageRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+			anchorToImage: this.anchorScaleBarToImage,
+			position: this.scaleBar.getPosition(),
+		};
 	}
 
 	private drawScaleBar(ctx: CanvasRenderingContext2D, rect: DOMRect): void {

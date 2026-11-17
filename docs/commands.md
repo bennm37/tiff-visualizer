@@ -72,8 +72,9 @@ See [layers](./layers.md).
 
 | Command | ID | Keybinding |
 | --- | --- | --- |
-| Export… | `tiffVisualizer.exportLayers` |  |
-| Copy Image | `tiffVisualizer.copyImage` |  |
+| Export… | `tiffVisualizer.exportLayers` | `ctrl` + `s` / `cmd` + `s (macOS)` |
+| Copy View | `tiffVisualizer.copyView` |  |
+| Copy Image | `tiffVisualizer.copyImage` | `ctrl` + `shift` + `c` / `cmd` + `shift` + `c (macOS)` |
 | Copy Image Information to Clipboard | `tiffVisualizer.copyImageInfo` | `ctrl` + `shift` + `i` / `cmd` + `shift` + `i (macOS)` |
 | Open as Point Cloud | `tiffVisualizer.openAsPointCloud` |  |
 
@@ -108,6 +109,8 @@ they do not shadow your normal editor bindings.
 | `ctrl` + `m` / `cmd` + `m (macOS)` | Toggle Metadata Panel |
 | `ctrl` + `shift` + `m` / `cmd` + `shift` + `m (macOS)` | Measure |
 | `ctrl` + `shift` + `i` / `cmd` + `shift` + `i (macOS)` | Copy Image Information to Clipboard |
+| `ctrl` + `shift` + `c` / `cmd` + `shift` + `c (macOS)` | Copy Image |
+| `ctrl` + `s` / `cmd` + `s (macOS)` | Export… |
 
 In **Open Image from URL**, `↑` / `↓` recall saved URLs in the input field;
 the saved URLs are not displayed as a separate list.

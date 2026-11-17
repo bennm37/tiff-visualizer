@@ -93,17 +93,36 @@ export class ImageCellsOverlay {
 		}
 		context.setTransform(1, 0, 0, 1, 0, 0);
 		context.clearRect(0, 0, canvas.width, canvas.height);
+		context.setTransform(dpr, 0, 0, dpr, 0, 0);
+		this.paintTo(context);
+	}
+
+	/**
+	 * Paint the visible layers. `context` is in viewport pixels and carries the
+	 * device scale (the screen's ratio live, the export scale for an export), so
+	 * the layers pick the detail that suits the pixels they are painted into.
+	 */
+	private paintTo(context: CanvasRenderingContext2D, complete = false): void {
 		const geometry = this.geometry();
 		if (!geometry) { return; }
-		const scale = dpr * geometry.rect.width / geometry.width;
-		context.setTransform(scale, 0, 0, dpr * geometry.rect.height / geometry.height, dpr * geometry.rect.left, dpr * geometry.rect.top);
+		const base = context.getTransform();
+		const scale = (base.a || 1) * geometry.rect.width / geometry.width;
 		context.save();
+		context.translate(geometry.rect.left, geometry.rect.top);
+		context.scale(geometry.rect.width / geometry.width, geometry.rect.height / geometry.height);
 		context.beginPath();
 		context.rect(0, 0, geometry.width, geometry.height);
 		context.clip();
-		for (const layer of this.layers) { if (!layer.isHidden()) { layer.draw(context, null, scale); } }
+		for (const layer of this.layers) { if (!layer.isHidden()) { layer.draw(context, null, scale, complete); } }
 		context.restore();
 	}
+
+	/** Paint every visible layer into an export. Unlike the live canvas it does not stop at a time budget. */
+	paintForExport(context: CanvasRenderingContext2D): void {
+		this.paintTo(context, true);
+	}
+
+	hasVisibleLayers(): boolean { return this.layers.some(layer => !layer.isHidden()); }
 
 	private onMouseDown = (event: MouseEvent): void => { this.pressed = { x: event.clientX, y: event.clientY }; };
 

@@ -8,6 +8,8 @@ import { ImagePreviewManager } from './imagePreviewManager';
 import { getOutputChannel } from '../extension';
 import { scanDicomFolder } from './dicomDataset';
 import type { DatasetManifest } from './datasetTypes';
+import type { IViewerCommandTarget, LayerExportFormat } from './types';
+import { viewFileName } from './viewCapture';
 import { normalizeRemoteImageUrl } from '../util/remoteImageUrl';
 import { normalizeUrlHistory, rememberUrl, UrlHistoryCursor } from '../util/urlHistory';
 import {
@@ -542,11 +544,32 @@ export function registerImagePreviewCommands(
 			if (activePreview) {
 				activePreview.copyImage();
 				logCommand('copyImage', 'success');
+			} else if (previewManager.activeViewer) {
+				vscode.window.showInformationMessage('The viewer in front has no single image to copy. Use Copy View to copy what is on screen.');
+				logCommand('copyImage', 'error', 'Not supported by the active viewer');
 			} else {
 				logCommand('copyImage', 'error', 'No active preview');
 			}
 		} catch (error) {
 			logCommand('copyImage', 'error', String(error));
+		}
+	}));
+
+	disposables.push(vscode.commands.registerCommand('tiffVisualizer.copyView', async () => {
+		logCommand('copyView', 'start');
+		try {
+			const viewer = previewManager.activeViewer;
+			if (!viewer) {
+				logCommand('copyView', 'error', 'No active viewer');
+			} else if (!viewer.copyView) {
+				vscode.window.showInformationMessage('The viewer in front cannot copy its view.');
+				logCommand('copyView', 'error', 'Not supported by the active viewer');
+			} else {
+				viewer.copyView();
+				logCommand('copyView', 'success');
+			}
+		} catch (error) {
+			logCommand('copyView', 'error', String(error));
 		}
 	}));
 
@@ -567,38 +590,57 @@ export function registerImagePreviewCommands(
 
 	disposables.push(vscode.commands.registerCommand('tiffVisualizer.exportLayers', async () => {
 		logCommand('exportLayers', 'start');
+		const viewer = previewManager.activeViewer;
 		const activePreview = previewManager.activePreview;
-		if (!activePreview) { logCommand('exportLayers', 'error', 'No active preview'); return; }
+		if (!viewer && !activePreview) { logCommand('exportLayers', 'error', 'No active preview'); return; }
 		try {
-			const options = await activePreview.getLayerExportCompatibility();
-			if (!options?.length) { throw new Error('No export formats are available for the current view'); }
-			const selected = await vscode.window.showQuickPick(options.map(option => ({
-				label: option.label,
-				description: option.description,
-				detail: option.detail,
-				format: option.format,
-			})), {
+			interface ExportChoice extends vscode.QuickPickItem { format?: LayerExportFormat; view?: true }
+			const choices: ExportChoice[] = [];
+			// The current view comes first: it is what most exports are for, and
+			// the quick pick starts on its first entry.
+			if (viewer?.captureView) {
+				choices.push({
+					label: 'Current view (PNG)',
+					description: 'What is on screen',
+					detail: 'The visible part of the image with its cells, transcripts, ROIs and scale bar.',
+					view: true,
+				});
+			}
+			if (activePreview) {
+				for (const option of await activePreview.getLayerExportCompatibility() ?? []) {
+					choices.push({ label: option.label, description: option.description, detail: option.detail, format: option.format });
+				}
+			}
+			if (!choices.length) { throw new Error('No export formats are available for the current view'); }
+			const selected = await vscode.window.showQuickPick(choices, {
 				title: 'Export image or layered document',
-				placeHolder: 'Choose an export format',
+				placeHolder: 'Choose what to export',
 				matchOnDescription: true,
 				matchOnDetail: true,
 			});
 			if (!selected) { return; }
+			if (selected.view) {
+				const saved = await exportCurrentView(viewer!);
+				if (saved) { logCommand('exportLayers', 'success', saved); }
+				return;
+			}
+			if (!activePreview || !selected.format) { return; }
+			const format = selected.format;
 			const labels: Record<string, string> = { png: 'PNG Images', ora: 'OpenRaster Documents', xcf: 'GIMP XCF Documents', kra: 'Krita Documents', psd: 'Photoshop Documents' };
-			const suffix = activePreview.getViewMode() === 'layers' ? `.layers.${selected.format}` : `.${selected.format}`;
+			const suffix = activePreview.getViewMode() === 'layers' ? `.layers.${format}` : `.${format}`;
 			const sourcePath = activePreview.resource.path;
 			const filenameStart = sourcePath.lastIndexOf('/') + 1;
 			const extensionStart = sourcePath.lastIndexOf('.');
 			const defaultPath = extensionStart > filenameStart ? `${sourcePath.slice(0, extensionStart)}${suffix}` : `${sourcePath}${suffix}`;
 			const saveUri = await vscode.window.showSaveDialog({
-				filters: { [labels[selected.format] || `${selected.format.toUpperCase()} Documents`]: [selected.format] },
+				filters: { [labels[format] || `${format.toUpperCase()} Documents`]: [format] },
 				defaultUri: vscode.Uri.file(defaultPath),
 			});
 			if (!saveUri) { return; }
-			const result = await activePreview.exportLayerDocument(selected.format);
+			const result = await activePreview.exportLayerDocument(format);
 			if (!result) { return; }
 			if (result.error || !result.payload) {
-				vscode.window.showErrorMessage(`Failed to export ${selected.format.toUpperCase()}: ${result.error || 'No data was returned'}`);
+				vscode.window.showErrorMessage(`Failed to export ${format.toUpperCase()}: ${result.error || 'No data was returned'}`);
 				logCommand('exportLayers', 'error', result.error || 'No payload');
 				return;
 			}
@@ -608,9 +650,9 @@ export function registerImagePreviewCommands(
 			await vscode.workspace.fs.writeFile(saveUri, bytes);
 			if (result.warnings.length) {
 				const preview = result.warnings.slice(0, 3).join('; ');
-				vscode.window.showWarningMessage(`${selected.format.toUpperCase()} exported with ${result.warnings.length} approximation${result.warnings.length === 1 ? '' : 's'}: ${preview}${result.warnings.length > 3 ? '; …' : ''}`);
+				vscode.window.showWarningMessage(`${format.toUpperCase()} exported with ${result.warnings.length} approximation${result.warnings.length === 1 ? '' : 's'}: ${preview}${result.warnings.length > 3 ? '; …' : ''}`);
 			} else {
-				vscode.window.showInformationMessage(`${selected.format.toUpperCase()} exported to ${saveUri.fsPath}`);
+				vscode.window.showInformationMessage(`${format.toUpperCase()} exported to ${saveUri.fsPath}`);
 			}
 			logCommand('exportLayers', 'success', saveUri.fsPath);
 		} catch (error) {
@@ -2108,4 +2150,45 @@ export function registerImagePreviewCommands(
 	}));
 
 	return vscode.Disposable.from(...disposables);
+}
+
+/**
+ * Export the visible part of a viewer as a PNG: choose what it includes, take
+ * the capture, then choose where it goes. The capture is taken before the save
+ * dialog so the file shows the view the command was run on. Returns the saved
+ * path, or undefined when cancelled or failed.
+ */
+async function exportCurrentView(viewer: IViewerCommandTarget): Promise<string | undefined> {
+	if (!viewer.captureView) { return undefined; }
+	type Include = vscode.QuickPickItem & { key: 'overlays' | 'scaleBar' | 'double' };
+	const items: Include[] = [
+		{ key: 'overlays', label: 'Cells, transcripts and ROIs', description: 'as shown', picked: true },
+		{ key: 'scaleBar', label: 'Scale bar', description: 'as placed in the viewer', picked: true },
+		{ key: 'double', label: 'Double resolution (2×)', description: 'twice the screen pixels, for figures', picked: false },
+	];
+	const included = await vscode.window.showQuickPick(items, {
+		canPickMany: true,
+		title: 'Export current view',
+		placeHolder: 'Choose what to include, then press Enter',
+	});
+	if (!included) { return undefined; }
+	const has = (key: Include['key']) => included.some(item => item.key === key);
+	const options = { scale: has('double') ? 2 : 1, overlays: has('overlays'), scaleBar: has('scaleBar') };
+
+	const captured = await vscode.window.withProgress(
+		{ location: vscode.ProgressLocation.Notification, title: 'Capturing the current view…' },
+		() => viewer.captureView!(options),
+	);
+	if ('error' in captured) {
+		vscode.window.showErrorMessage(`Failed to export the view: ${captured.error}`);
+		return undefined;
+	}
+	const source = viewer.exportSource;
+	const name = viewFileName(source?.path ?? '', options.scale);
+	const defaultUri = source ? vscode.Uri.joinPath(source, '..', name) : undefined;
+	const saveUri = await vscode.window.showSaveDialog({ filters: { 'PNG Images': ['png'] }, defaultUri });
+	if (!saveUri) { return undefined; }
+	await vscode.workspace.fs.writeFile(saveUri, Buffer.from(captured.payload, 'base64'));
+	vscode.window.showInformationMessage(`View exported to ${saveUri.fsPath} (${captured.width} × ${captured.height} px)`);
+	return saveUri.fsPath;
 }

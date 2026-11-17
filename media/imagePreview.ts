@@ -52,6 +52,11 @@ import {
 } from './modules/channel-composite.js';
 import { RoiManager } from './modules/measure/roi-manager.js';
 import { RoiOverlay } from './modules/measure/roi-overlay.js';
+import { readBottomInset } from './modules/scale-bar.js';
+import {
+	DEFAULT_VIEW_OPTIONS, blobToBase64, canvasToPng, createViewCanvas, frameScaleBarPainter, paintElementPixels, paintView, viewFrame,
+	type ExportSize, type ViewOptions, type ViewPainter,
+} from './modules/view-export.js';
 import { calibrationFromOme, calibrationFromCzi, calibrationFromDicom, calibrationFromTagList } from './modules/measure/calibration.js';
 import { deserializeRoi, parseSidecar, serializeRoi } from './modules/measure/roi-io.js';
 import { toScalarPlane, UNCALIBRATED, type Calibration, type MeasurementSource } from './modules/measure/types.js';
@@ -3876,6 +3881,14 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 				copyImage();
 				break;
 
+			case 'copyView':
+				copyView();
+				break;
+
+			case 'exportView':
+				void exportView(message.requestId, message.options);
+				break;
+
 			case 'showContextMenu':
 				document.dispatchEvent(new MouseEvent('contextmenu', {
 					bubbles: true,
@@ -5136,7 +5149,7 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		// Copy handling
 		document.addEventListener('copy', (e) => {
 			if (isEditableEventTarget(e.target)) { return; }
-			copyImage();
+			copyView();
 		});
 
 		// Custom context menu with various commands
@@ -5148,7 +5161,10 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 			const createMenuItem = (label: string, action: () => void): MenuItem => ({ label, action: () => { setTimeout(action, 0); } });
 
 			// Add Copy option (triggers command via extension for logging)
-			fileItems.push(createMenuItem('Copy Image and Position', () => {
+			fileItems.push(createMenuItem('Copy View', () => {
+				vscode.postMessage({ type: 'executeCommand', command: 'tiffVisualizer.copyView' });
+			}));
+			fileItems.push(createMenuItem('Copy Image', () => {
 				vscode.postMessage({ type: 'executeCommand', command: 'tiffVisualizer.copyImage' });
 			}));
 
@@ -7593,89 +7609,133 @@ import type { CellsPanelModel } from './modules/cells/cells-model.js';
 		});
 	}
 
+	/** Run `action` once the webview has focus, which the clipboard needs; give up waiting after a second. */
+	function whenFocused(action: () => void, attempts = 50): void {
+		if (document.hasFocus() || attempts <= 0) { action(); return; }
+		setTimeout(() => whenFocused(action, attempts - 1), 20);
+	}
+
 	/**
-	 * Copy image to clipboard and store position/zoom state
+	 * Remember where the view is, relative to the image, so Paste Position can
+	 * put another image (of any size) at the same place and zoom.
 	 */
-	async function copyImage() {
-		if (!canvas) return;
-		// The original code had `(retries = 5)` here, but the instruction's example removed it.
-		// To maintain functionality, `retries` is now defined internally if needed.
-		let retries = 5;
-		if (!document.hasFocus() && retries > 0) {
-			setTimeout(() => { copyImage(); }, 20);
-			return;
+	function rememberPosition(): void {
+		if (!canvas || !imageElement) { return; }
+		const zoomState = zoomController.getCurrentState();
+		const center = zoomController.getRelativeCenter();
+		copiedPositionState = {
+			relativeX: center.x,
+			relativeY: center.y,
+			scale: zoomState.scale,
+			sourceWidth: canvas.width,
+			sourceHeight: canvas.height
+		};
+		vscode.postMessage({ type: 'positionCopied', state: copiedPositionState });
+	}
+
+	/**
+	 * The visible part of the image as it is on screen: pixels, then cells and
+	 * ROIs, then the scale bar. Nothing of the viewer's own chrome is included.
+	 */
+	async function captureView(options: ViewOptions): Promise<{ canvas: HTMLCanvasElement; size: ExportSize } | null> {
+		const element = imageElement;
+		if (!element) { return null; }
+		const rect = element.getBoundingClientRect();
+		const frame = viewFrame(
+			{ left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+			{ width: window.innerWidth, height: window.innerHeight },
+			readBottomInset(),
+		);
+		if (!frame) { return null; }
+		const created = createViewCanvas(frame, options.scale);
+		if (!created) { throw new Error('The view is too large to export. Zoom in or lower the export scale.'); }
+		const painters: ViewPainter[] = [ctx => {
+			paintElementPixels(ctx, element);
+			document.querySelectorAll('.detail-patch').forEach(patch => paintElementPixels(ctx, patch));
+		}];
+		if (options.overlays) {
+			painters.push(ctx => { imageCells?.paintForExport(ctx); roiOverlay.paintForExport(ctx); });
 		}
+		const bar = options.scaleBar ? roiOverlay.scaleBarForExport() : null;
+		if (bar) { painters.push(frameScaleBarPainter(bar)); }
+		paintView(created.ctx, frame, created.size.scale, painters);
+		return { canvas: created.canvas, size: created.size };
+	}
 
-		// Check if we have an image to copy
-		if (!canvas && (!image || !image.naturalWidth)) {
-			showNotification('No image loaded to copy', 'error');
-			console.error('Copy failed: No image available');
-			return;
-		}
+	/** Copy the current view to the clipboard and remember its position for Paste Position. */
+	function copyView(): void {
+		whenFocused(async () => {
+			if (!imageElement) {
+				showNotification('No image loaded to copy', 'error');
+				return;
+			}
+			try {
+				const captured = await captureView(DEFAULT_VIEW_OPTIONS);
+				if (!captured) { showNotification('Nothing of the image is in view to copy', 'error'); return; }
+				await navigator.clipboard.write([new ClipboardItem({ 'image/png': canvasToPng(captured.canvas) })]);
+				rememberPosition();
+				showNotification('View copied to clipboard. Paste Position applies it to another image.', 'success');
+			} catch (e) {
+				console.error('Copy view failed:', e);
+				showNotification(`Failed to copy view: ${(e as any).message}`, 'error');
+			}
+		});
+	}
 
-		// Store the current position and zoom state for paste position feature
-		// Relative coordinates also preserve views dragged beyond the image center.
-		if (canvas && imageElement) {
-			const zoomState = zoomController.getCurrentState();
-			const imageWidth = canvas.width;
-			const imageHeight = canvas.height;
-
-			const center = zoomController.getRelativeCenter();
-
-			// Relative positions work across image resolutions, including off-image centers.
-			copiedPositionState = {
-				relativeX: center.x,
-				relativeY: center.y,
-				scale: zoomState.scale,
-				sourceWidth: imageWidth,
-				sourceHeight: imageHeight
-			};
-
-			// Send position to extension for cross-webview paste support
-			vscode.postMessage({
-				type: 'positionCopied',
-				state: copiedPositionState
-			});
-
-			console.log('Position copied:', copiedPositionState);
-		}
-
+	/** Answer the host's request for the current view as PNG data, for the export dialog. */
+	async function exportView(requestId: number, options: ViewOptions): Promise<void> {
 		try {
-			await navigator.clipboard.write([new ClipboardItem({
-				'image/png': new Promise((resolve, reject) => {
-					const copyCanvas = document.createElement('canvas');
-					const ctx = copyCanvas.getContext('2d');
-					if (!ctx) {
-						return reject(new Error('Could not get canvas context'));
-					}
-
-					const sourceElement = imageElement?.tagName === 'IMG'
-						? (imageElement as unknown as HTMLImageElement)
-						: canvas || image;
-					const sourceWidth = (sourceElement as any).naturalWidth || sourceElement.width;
-					const sourceHeight = (sourceElement as any).naturalHeight || sourceElement.height;
-					copyCanvas.width = sourceWidth;
-					copyCanvas.height = sourceHeight;
-					ctx.drawImage(sourceElement, 0, 0);
-
-					copyCanvas.toBlob((blob) => {
-						if (blob) {
-							resolve(blob);
-						} else {
-							reject(new Error('Could not create blob'));
-						}
-						copyCanvas.remove();
-					}, 'image/png');
-				})
-			})]);
-
-			// Show success notification - include position info
-			const positionInfo = copiedPositionState ? ' + position' : '';
-			showNotification(`Image${positionInfo} copied to clipboard`, 'success');
-		} catch (e) {
-			console.error('Copy failed:', e);
-			showNotification(`Failed to copy image: ${(e as any).message}`, 'error');
+			const captured = await captureView(options);
+			if (!captured) { throw new Error('Nothing of the image is in view to export.'); }
+			const payload = await blobToBase64(await canvasToPng(captured.canvas));
+			vscode.postMessage({ type: 'didExportView', requestId, payload, width: captured.size.width, height: captured.size.height, scale: captured.size.scale });
+		} catch (error) {
+			vscode.postMessage({ type: 'didExportView', requestId, error: error instanceof Error ? error.message : String(error) });
 		}
+	}
+
+	/** Copy the whole image, at its own resolution and without the view or overlays, to the clipboard. */
+	function copyImage(): void {
+		whenFocused(async () => {
+			if (!canvas && (!image || !image.naturalWidth)) {
+				showNotification('No image loaded to copy', 'error');
+				console.error('Copy failed: No image available');
+				return;
+			}
+			try {
+				await navigator.clipboard.write([new ClipboardItem({
+					'image/png': new Promise((resolve, reject) => {
+						const copyCanvas = document.createElement('canvas');
+						const ctx = copyCanvas.getContext('2d');
+						if (!ctx) {
+							return reject(new Error('Could not get canvas context'));
+						}
+
+						const sourceElement = imageElement?.tagName === 'IMG'
+							? (imageElement as unknown as HTMLImageElement)
+							: canvas || image;
+						const sourceWidth = (sourceElement as any).naturalWidth || sourceElement.width;
+						const sourceHeight = (sourceElement as any).naturalHeight || sourceElement.height;
+						copyCanvas.width = sourceWidth;
+						copyCanvas.height = sourceHeight;
+						ctx.drawImage(sourceElement, 0, 0);
+
+						copyCanvas.toBlob((blob) => {
+							if (blob) {
+								resolve(blob);
+							} else {
+								reject(new Error('Could not create blob'));
+							}
+							copyCanvas.remove();
+						}, 'image/png');
+					})
+				})]);
+				showNotification('Image copied to clipboard', 'success');
+			} catch (e) {
+				console.error('Copy failed:', e);
+				showNotification(`Failed to copy image: ${(e as any).message}`, 'error');
+			}
+		});
 	}
 
 	/**

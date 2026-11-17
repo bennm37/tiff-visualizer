@@ -29,6 +29,7 @@ export class MessageRouter {
 		this.handlers.set('ready', new ReadyMessageHandler());
 		this.handlers.set('didGetLayerExportCompatibility', new LayerExportCompatibilityMessageHandler());
 		this.handlers.set('didExportLayerDocument', new ExportLayerDocumentMessageHandler());
+		this.handlers.set('didExportView', new ExportViewMessageHandler());
 		this.handlers.set('get-initial-data', new InitialDataMessageHandler());
 		this.handlers.set('refresh-status', new RefreshStatusMessageHandler());
 		this.handlers.set('show-error', new ShowErrorMessageHandler());
@@ -223,6 +224,12 @@ class ExportLayerDocumentMessageHandler implements MessageHandler {
 			warnings: Array.isArray(message.warnings) ? message.warnings : [],
 			error: message.error,
 		});
+	}
+}
+
+class ExportViewMessageHandler implements MessageHandler {
+	handle(message: any, preview: ImagePreview): void {
+		preview.receiveViewCapture(message);
 	}
 }
 

@@ -9,6 +9,9 @@ export type DatasetAxis = { key: string; label: string; size: number; valueLabel
 export type DatasetSeries = { id: string; label: string; axes: DatasetAxis[]; planes: DatasetPlane[] };
 export type DatasetManifest = { id: string; kind: 'dicom' | 'ome-tiff'; label: string; series: DatasetSeries[] };
 
+/** What an export of the current view includes. `scale` is output pixels per screen pixel. */
+export type ViewExportOptions = { scale: number; overlays: boolean; scaleBar: boolean };
+
 type MessageMap<M> = { [K in keyof M]: { type: K } & M[K] }[keyof M];
 type Empty = Record<never, never>;
 export interface AutomationArguments {
@@ -23,7 +26,8 @@ export type HostToViewerMessage = AutomationRequest | MessageMap<{
   clearImage: Empty; setScale: { scale: number | string };
   addLayerImages: { images: { src: string; resourceUri: string }[] };
   layerUrisResolved: { map: Record<string, string> };
-  zoomIn: Empty; zoomOut: Empty; resetZoom: Empty; copyImage: Empty;
+  zoomIn: Empty; zoomOut: Empty; resetZoom: Empty; copyImage: Empty; copyView: Empty;
+  exportView: { requestId: number; options: ViewExportOptions };
   getLayerExportCompatibility: Empty; exportLayerDocument: { format: string };
   'start-comparison': { peerUri: string }; showContextMenu: { x?: number; y?: number };
   pastePosition: { state?: CopiedPosition | null };
@@ -69,6 +73,7 @@ export type ViewerToHostMessage = MessageMap<{
   positionCopied: { state: CopiedPosition }; layerModeChanged: { active: boolean };
   didGetLayerExportCompatibility: { options: { format: string; compatible: boolean; label?: string; description?: string; detail?: string }[] };
   didExportLayerDocument: { format?: string; payload?: string; error?: string; warnings?: string[] };
+  didExportView: { requestId: number; payload?: string; width?: number; height?: number; scale?: number; error?: string };
   measureSaveText: { fileName: string; content: string; open?: boolean };
   measureSaveBinary: { fileName: string; bytes: number[] };
   measureSaveSidecar: { content: string }; measureRequestImport: { kind: 'imagej' | 'sidecar' };

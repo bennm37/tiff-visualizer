@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { ImageSettingsManager } from './imageSettings';
 import { AppStateManager } from './appStateManager';
+import type { ViewExportOptions } from '../../shared/viewer-protocol';
+import type { ViewCaptureResult } from './viewCapture';
 
 export type LayerExportFormat = 'png' | 'ora' | 'xcf' | 'kra' | 'psd';
 export interface LayerExportOption {
@@ -24,6 +26,12 @@ export interface LayerExportResult {
  */
 export interface IViewerCommandTarget {
 	toggleScaleBar?(): void;
+	/** Copy the visible part of the viewer, with its overlays, to the clipboard. */
+	copyView?(): void;
+	/** The visible part of the viewer as a PNG, for the export dialog. */
+	captureView?(options: ViewExportOptions): Promise<ViewCaptureResult>;
+	/** What the exported file is named after, and where its save dialog starts. */
+	readonly exportSource?: vscode.Uri;
 }
 
 /** What a viewer that is not an image preview needs from the manager: session settings and a way to become the command target. */

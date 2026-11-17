@@ -1,6 +1,8 @@
 import { parseAutomationRequest, type HostToViewerMessage, type ViewerToHostMessage } from '../shared/viewer-protocol';
 import { defaultDisplaySettings, setDisplayMode, type DisplaySettings } from '../shared/display-settings';
 import { installPythonHost } from './python-host';
+import { DEFAULT_VIEW_OPTIONS } from '../media/modules/view-export.js';
+import { viewFileName } from '../src/imagePreview/viewCapture.js';
 import { flushSync, mount } from 'svelte';
 import App from './App.svelte';
 import JetBrainsApp from './JetBrainsApp.svelte';
@@ -815,9 +817,16 @@ function handleFormatInfo(message: Extract<ViewerToHostMessage, { type: 'formatI
   syncStatusBar();
 }
 
+let viewExportRequest = 0;
+
+function exportCurrentView(): void {
+  sendToViewer({ type: 'exportView', requestId: ++viewExportRequest, options: { ...DEFAULT_VIEW_OPTIONS } });
+}
+
 function executeCommand(command: string): void {
   const directMessages: Record<string, HostToViewerMessage> = {
     'tiffVisualizer.copyImage': { type: 'copyImage' },
+    'tiffVisualizer.copyView': { type: 'copyView' },
     'tiffVisualizer.pastePosition': { type: 'pastePosition', state: copiedPosition },
     'tiffVisualizer.toggleHistogram': { type: 'toggleHistogram' },
     'tiffVisualizer.toggleChannels': { type: 'toggleChannels' },
@@ -849,7 +858,10 @@ function executeCommand(command: string): void {
       input.click();
     }
   } else if (command === 'tiffVisualizer.exportLayers') {
-    sendToViewer({ type: 'getLayerExportCompatibility' });
+    // A layer stack still goes through the layer exporter; everything else
+    // exports what is in view, as the default of the export dialog does in the editor.
+    if (layersActive) sendToViewer({ type: 'getLayerExportCompatibility' });
+    else exportCurrentView();
   } else if (command === 'tiffVisualizer.toggleNanColor') {
     // Same cycle as the extension: black, fuchsia, transparent. Kept as a
     // literal list rather than importing the viewer's, since this host talks to
@@ -980,6 +992,11 @@ function handleViewerMessage(message: ViewerToHostMessage): void {
       else showToast('No compatible export format is available for this view.');
       break;
     }
+    case 'didExportView':
+      if (message.requestId !== viewExportRequest) break;
+      if (message.error) showToast(String(message.error));
+      else if (message.payload) downloadBytes(viewFileName(files[fileIndex]?.name || ''), bytesFromBase64(message.payload), 'image/png');
+      break;
     case 'didExportLayerDocument':
       if (message.error) showToast(String(message.error));
       else if (message.payload) downloadBytes(`scientific-image-export.${message.format || 'bin'}`, bytesFromBase64(message.payload));
@@ -1188,6 +1205,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 's' && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) {
+      event.preventDefault();
+      executeCommand('tiffVisualizer.exportLayers');
+    }
     if (event.key === 'Escape' && !controlPopover.hidden) closeControlPopover();
     if (event.key === 'Escape' && logPanel && !logPanel.hidden) setLoadingLogOpen(false);
   });

@@ -87,7 +87,7 @@ const GROUPS = [
 	{
 		title: 'Export and interchange',
 		doc: './export.md',
-		ids: ['tiffVisualizer.exportLayers', 'tiffVisualizer.copyImage', 'tiffVisualizer.copyImageInfo',
+		ids: ['tiffVisualizer.exportLayers', 'tiffVisualizer.copyView', 'tiffVisualizer.copyImage', 'tiffVisualizer.copyImageInfo',
 			'tiffVisualizer.openAsPointCloud'],
 	},
 	{
