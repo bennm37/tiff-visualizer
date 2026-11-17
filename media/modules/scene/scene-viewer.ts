@@ -4,6 +4,10 @@ import { PAN_DRAG_THRESHOLD, wheelDeltaPixels, wheelShouldZoom, wheelZoomFactor 
 import { compositeChannels, type ChannelPlane, type ChannelSettings } from '../channel-composite.js';
 import type { Calibration } from '../measure/types.js';
 import { ScaleBarControl, type ScaleBarPosition } from '../scale-bar.js';
+import {
+	createViewCanvas, frameScaleBarPainter, paintView, viewFrame,
+	type ExportSize, type ViewOptions, type ViewPainter,
+} from '../view-export.js';
 import type { RegionSamples, TiffChannelSource } from './channel-source.js';
 import {
 	chooseLevel, chooseOverview, clampCamera, fitCamera, fitScale, screenToScene, tileKey, tileRect, tileSceneRect,
@@ -33,8 +37,8 @@ import {
  */
 
 export interface SceneOverlay {
-	/** `context` maps scene pixels to device pixels; `scale` is device pixels per scene pixel. */
-	draw(context: CanvasRenderingContext2D, camera: Camera, scale: number): void;
+	/** `context` maps scene pixels to device pixels; `scale` is device pixels per scene pixel. `complete` asks for everything at once, not within a frame budget: an export is waiting. */
+	draw(context: CanvasRenderingContext2D, camera: Camera, scale: number, complete?: boolean): void;
 	/** A click that was not a drag, in scene pixels. Return true when the overlay used it. */
 	onClick?(point: { x: number; y: number }, event: PointerEvent): boolean;
 	/** Text for the cursor readout at a scene point. */
@@ -119,6 +123,10 @@ export class SceneViewer {
 	private disposed = false;
 	private cameraTimer = 0;
 	private loadingTiles = 0;
+	/** Composites a frame budget left for later; an export waits for none to be left. */
+	private compositingLeft = false;
+	/** The tiles and level of the last frame, which is what the screen shows. */
+	private shown: { wanted: TileEntry[]; levelPosition: number } = { wanted: [], levelPosition: 0 };
 
 	private constructor(options: SceneViewerOptions, overviewPosition: number) {
 		this.options = options;
@@ -313,6 +321,8 @@ export class SceneViewer {
 			this.compositeTile(entry, active, mask);
 		}
 
+		this.shown = { wanted, levelPosition };
+		this.compositingLeft = compositing;
 		this.draw(wanted, levelPosition);
 		this.evict(wantedKeys);
 		this.loadingTiles = wanted.filter(entry => !this.hasPlanes(entry, active) && !entry.failed.some(Boolean)).length;
@@ -328,7 +338,17 @@ export class SceneViewer {
 		context.fillRect(0, 0, this.canvas.width, this.canvas.height);
 		const scale = this.camera.scale * dpr;
 		context.setTransform(scale, 0, 0, scale, this.camera.x * dpr, this.camera.y * dpr);
+		this.paintScene(context, wanted, levelPosition, scale, true, false);
+		context.setTransform(1, 0, 0, 1, 0, 0);
+		this.drawScaleBar(context, dpr);
+	}
 
+	/**
+	 * The picture and its overlays. `context` maps scene pixels to its own
+	 * pixels and `scale` is those pixels per scene pixel, so the screen and an
+	 * export share this one path. `complete` asks overlays for everything now.
+	 */
+	private paintScene(context: CanvasRenderingContext2D, wanted: TileEntry[], levelPosition: number, scale: number, overlays: boolean, complete: boolean): void {
 		// A level pixel larger than ~2 screen pixels is shown as the square it is.
 		const overview = this.levels[this.overviewPosition];
 		context.imageSmoothingEnabled = overview.width / this.scene.width * this.camera.scale < 0.5;
@@ -342,16 +362,67 @@ export class SceneViewer {
 			const target = tileSceneRect(level, entry.address, tileSize, this.scene);
 			context.drawImage(entry.canvas, target.x, target.y, target.width, target.height);
 		}
-		for (const overlay of this.overlays) { overlay.draw(context, this.camera, scale); }
-		context.setTransform(1, 0, 0, 1, 0, 0);
-		this.drawScaleBar(context, dpr);
+		if (!overlays) { return; }
+		for (const overlay of this.overlays) { overlay.draw(context, this.camera, scale, complete); }
+	}
+
+	/**
+	 * The visible part of the scene as it is on screen: the picture, then the
+	 * overlays, then the scale bar, without the readout. Waits for the tiles of
+	 * the current view to arrive first, so the export is not a blurred preview.
+	 */
+	async captureView(options: ViewOptions): Promise<{ canvas: HTMLCanvasElement; size: ExportSize } | null> {
+		const camera = this.camera;
+		const frame = viewFrame(
+			{ left: camera.x, top: camera.y, width: this.scene.width * camera.scale, height: this.scene.height * camera.scale },
+			{ width: this.viewWidth, height: this.viewHeight },
+		);
+		if (!frame) { return null; }
+		const created = createViewCanvas(frame, options.scale);
+		if (!created) { throw new Error('The view is too large to export. Zoom in or lower the export scale.'); }
+		await this.settled();
+		if (this.disposed) { return null; }
+		const { wanted, levelPosition } = this.shown;
+		const scale = created.size.scale * camera.scale;
+		const painters: ViewPainter[] = [(ctx, area) => {
+			ctx.fillStyle = BACKGROUND;
+			ctx.fillRect(area.left, area.top, area.width, area.height);
+			ctx.translate(camera.x, camera.y);
+			ctx.scale(camera.scale, camera.scale);
+			this.paintScene(ctx, wanted, levelPosition, scale, options.overlays, true);
+		}];
+		if (options.scaleBar && this.showScaleBar) {
+			painters.push(frameScaleBarPainter({
+				pixelScale: camera.scale,
+				calibration: this.calibration(),
+				imageRect: { left: camera.x, top: camera.y, width: this.scene.width * camera.scale, height: this.scene.height * camera.scale },
+				anchorToImage: this.anchorScaleBarToImage,
+				position: this.scaleBar.getPosition(),
+			}));
+		}
+		paintView(created.ctx, frame, created.size.scale, painters);
+		return { canvas: created.canvas, size: created.size };
+	}
+
+	/** Render until the tiles of the current view have arrived and are composited, or `timeoutMs` has passed. */
+	private async settled(timeoutMs = 20_000): Promise<void> {
+		const end = performance.now() + timeoutMs;
+		for (;;) {
+			this.render();
+			if ((this.loadingTiles === 0 && !this.compositingLeft) || this.disposed || performance.now() > end) { return; }
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
+	}
+
+	private calibration(): Calibration {
+		const micron = this.options.pixelSizeUm;
+		return { pixelWidth: micron, pixelHeight: micron, unit: 'µm', origin: 'imported' };
 	}
 
 	private drawScaleBar(context: CanvasRenderingContext2D, dpr: number): void {
 		this.scaleBar.hideHandle();
 		if (!this.showScaleBar) { return; }
-		const micron = this.options.pixelSizeUm;
-		const calibration: Calibration = { pixelWidth: micron, pixelHeight: micron, unit: 'µm', origin: 'imported' };
+		const calibration = this.calibration();
 		context.save();
 		context.setTransform(dpr, 0, 0, dpr, 0, 0);
 		this.scaleBar.draw(context, {

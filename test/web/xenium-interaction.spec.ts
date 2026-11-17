@@ -154,3 +154,55 @@ test('live Xenium mode change cancels dragging and gates double-click fit', asyn
   await expect.poll(async () => (await camera(page)).scale).toBeLessThan(1);
   await settle(page);
 });
+
+test('Xenium captureView exports the visible part with overlays and the scale bar', async ({ page }) => {
+  await open(page, true);
+  await page.addStyleTag({ content: readFileSync(path.join(root, 'media/imagePreview.css'), 'utf8') });
+  // A magenta square at scene pixels 100..200, drawn by an overlay like cells or transcripts are.
+  await page.evaluate(() => {
+    const w = window as any;
+    w.scene.addOverlay({ draw(ctx: CanvasRenderingContext2D) { ctx.fillStyle = '#ff00ff'; ctx.fillRect(100, 100, 100, 100); } });
+    w.scene.setCamera({ scale: 1, x: -50, y: -30 });
+    w.probe = async (options: unknown, points: number[][]) => {
+      const captured = await w.scene.captureView(options);
+      if (!captured) { return null; }
+      const ctx = captured.canvas.getContext('2d') as CanvasRenderingContext2D;
+      const color = (x: number, y: number) => Array.from(ctx.getImageData(x, y, 1, 1).data).join(',');
+      let whiteInBar = 0;
+      const data = ctx.getImageData(0, Math.max(0, captured.canvas.height - 60), Math.min(300, captured.canvas.width), Math.min(60, captured.canvas.height)).data;
+      for (let at = 0; at < data.length; at += 4) { if (data[at] === 255 && data[at + 1] === 255 && data[at + 2] === 255) { whiteInBar++; } }
+      return { width: captured.canvas.width, height: captured.canvas.height, scale: captured.size.scale, colors: points.map(([x, y]) => color(x, y)), whiteInBar };
+    };
+  });
+  await settle(page);
+
+  // The square is at viewport (50..150, 70..170) and, at 1x, at the same place in the export.
+  const full = await page.evaluate(() => (window as any).probe({ scale: 1, overlays: true, scaleBar: true }, [[100, 120], [400, 300]]));
+  expect(full).not.toBeNull();
+  expect([full.width, full.height]).toEqual([800, 600]);
+  expect(full.colors[0]).toBe('255,0,255,255');
+  expect(full.colors[1]).not.toBe('255,0,255,255');
+  expect(full.whiteInBar).toBeGreaterThan(50);
+
+  // Overlays and the scale bar can be left out, and 2x doubles the pixels and keeps the geometry.
+  const plain = await page.evaluate(() => (window as any).probe({ scale: 2, overlays: false, scaleBar: false }, [[200, 240]]));
+  expect([plain.width, plain.height, plain.scale]).toEqual([1600, 1200, 2]);
+  expect(plain.colors[0]).not.toBe('255,0,255,255');
+  expect(plain.whiteInBar).toBe(0);
+  const doubled = await page.evaluate(() => (window as any).probe({ scale: 2, overlays: true, scaleBar: true }, [[200, 240], [100, 120]]));
+  expect(doubled.colors[0]).toBe('255,0,255,255');
+  expect(doubled.colors[1]).not.toBe('255,0,255,255');
+
+  // Zoomed out, the scene is smaller than the window and only it is exported.
+  await page.evaluate(() => (window as any).scene.setCamera({ scale: 0.5, x: 100, y: 100 }));
+  await settle(page);
+  const camera = await page.evaluate(() => (window as any).scene.currentCamera);
+  const small = await page.evaluate(() => (window as any).probe({ scale: 1, overlays: true, scaleBar: true }, []));
+  expect([small.width, small.height]).toEqual([Math.floor(1000 * camera.scale), Math.floor(800 * camera.scale)]);
+
+  // Zoomed in, the export is the window and not the whole scene.
+  await page.evaluate(() => (window as any).scene.setCamera({ scale: 4, x: -400, y: -400 }));
+  await settle(page);
+  const zoomed = await page.evaluate(() => (window as any).probe({ scale: 1, overlays: true, scaleBar: true }, []));
+  expect([zoomed.width, zoomed.height]).toEqual([800, 600]);
+});

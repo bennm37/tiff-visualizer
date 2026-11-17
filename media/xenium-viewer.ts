@@ -26,6 +26,7 @@ import { SceneViewer } from './modules/scene/scene-viewer.js';
 import type { Camera } from './modules/scene/pyramid.js';
 import { omeChannelHints, purposeTint, type SceneManifest } from './modules/scene/xenium-manifest.js';
 import type { ScaleBarPosition } from './modules/scale-bar.js';
+import { DEFAULT_VIEW_OPTIONS, blobToBase64, canvasToPng, type ViewOptions } from './modules/view-export.js';
 import type { ChannelDefaults } from '../shared/viewer-settings';
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void; getState(): any; setState(state: unknown): void };
@@ -268,6 +269,49 @@ async function start(manifest: SceneManifest): Promise<void> {
 	}
 }
 
+/** A short message over the viewer, in the style the image viewer uses for its copy notices. */
+function notify(text: string, kind: 'success' | 'error'): void {
+	document.querySelector('.copy-notification')?.remove();
+	const note = document.createElement('div');
+	note.className = `copy-notification copy-notification-${kind}`;
+	note.textContent = text;
+	note.addEventListener('click', () => note.remove());
+	document.body.appendChild(note);
+	if (kind === 'success') { setTimeout(() => note.remove(), 3000); }
+}
+
+/** Copy the visible part of the scene, with its overlays and scale bar, to the clipboard. */
+function copyView(): void {
+	if (!viewer) { notify('No scene loaded to copy', 'error'); return; }
+	const scene = viewer;
+	void (async () => {
+		try {
+			// The clipboard item takes the capture as a promise, so the browser keeps its permission while the tiles settle.
+			await navigator.clipboard.write([new ClipboardItem({
+				'image/png': scene.captureView(DEFAULT_VIEW_OPTIONS).then(captured => {
+					if (!captured) { throw new Error('Nothing of the scene is in view to copy.'); }
+					return canvasToPng(captured.canvas);
+				}),
+			})]);
+			notify('View copied to clipboard', 'success');
+		} catch (error) {
+			notify(`Failed to copy view: ${error instanceof Error ? error.message : String(error)}`, 'error');
+		}
+	})();
+}
+
+/** Answer the host's request for the current view as PNG data, for the export dialog. */
+async function exportView(requestId: number, options: ViewOptions): Promise<void> {
+	try {
+		const captured = await viewer?.captureView(options);
+		if (!captured) { throw new Error('Nothing of the scene is in view to export.'); }
+		const payload = await blobToBase64(await canvasToPng(captured.canvas));
+		vscode.postMessage({ type: 'didExportView', requestId, payload, width: captured.size.width, height: captured.size.height, scale: captured.size.scale });
+	} catch (error) {
+		vscode.postMessage({ type: 'didExportView', requestId, error: error instanceof Error ? error.message : String(error) });
+	}
+}
+
 window.addEventListener('message', event => {
 	const message = event.data;
 	if (message?.type === 'scene' && message.manifest) { void start(message.manifest as SceneManifest); }
@@ -293,6 +337,8 @@ window.addEventListener('message', event => {
 		panel?.render();
 	}
 	else if (message?.type === 'toggleChannels') { panel?.toggle(); }
+	else if (message?.type === 'copyView') { copyView(); }
+	else if (message?.type === 'exportView') { void exportView(message.requestId, message.options as ViewOptions); }
 	else if (message?.type === 'cellSource') {
 		const pending = pendingRequests.get(message.requestId);
 		pendingRequests.delete(message.requestId);
@@ -322,8 +368,17 @@ document.addEventListener('contextmenu', event => {
 		}));
 	}
 	items.push({ heading: true, label: 'File' });
+	items.push(defer('Copy View', () => vscode.postMessage({ type: 'executeCommand', command: 'tiffVisualizer.copyView' })));
+	items.push(defer('Export…', () => vscode.postMessage({ type: 'executeCommand', command: 'tiffVisualizer.exportLayers' })));
 	items.push(defer('Open as Text', () => vscode.postMessage({ type: 'openAsText' })));
 	openContextMenu(items, event.clientX, event.clientY);
+});
+
+document.addEventListener('copy', event => {
+	const target = event.target as HTMLElement | null;
+	if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) { return; }
+	event.preventDefault();
+	copyView();
 });
 
 window.addEventListener('keydown', event => {

@@ -8,6 +8,7 @@ import { escapeAttribute, getNonce } from '../util/dom';
 import { answerCellRequest, configuredSources, specFor, type ConfiguredSource } from '../cells/cellFiles';
 import { getCellIdColumns } from '../cells/cellIdColumns';
 import type { IViewerCommandTarget, IViewerRegistry } from '../imagePreview/types';
+import { ViewCaptureChannel } from '../imagePreview/viewCapture';
 
 /**
  * Opens a Xenium output bundle from its `experiment.xenium` manifest.
@@ -56,8 +57,15 @@ export class XeniumEditorProvider implements vscode.CustomReadonlyEditorProvider
 			shownScaleBar = shown;
 			void panel.webview.postMessage({ type: 'settings', ...this.settings() });
 		});
-		panel.onDidDispose(() => { settingsWatcher.dispose(); sessionWatcher?.dispose(); });
-		const target: IViewerCommandTarget = { toggleScaleBar: () => { this.viewers?.settingsManager.toggleScaleBar(); } };
+		const viewCapture = new ViewCaptureChannel(message => { void panel.webview.postMessage(message); });
+		panel.onDidDispose(() => { settingsWatcher.dispose(); sessionWatcher?.dispose(); viewCapture.dispose(); });
+		const target: IViewerCommandTarget = {
+			toggleScaleBar: () => { this.viewers?.settingsManager.toggleScaleBar(); },
+			copyView: () => { void panel.webview.postMessage({ type: 'copyView' }); },
+			captureView: options => viewCapture.capture(options),
+			// The bundle's folder name, beside the folder: the default for an exported view.
+			exportSource: Utils.joinPath(bundleFolder, '..', Utils.basename(bundleFolder)),
+		};
 		this.viewers?.registerViewer(target, panel);
 		panel.webview.onDidReceiveMessage(async message => {
 			switch (message?.type) {
@@ -73,6 +81,10 @@ export class XeniumEditorProvider implements vscode.CustomReadonlyEditorProvider
 				case 'executeCommand':
 					// Only the commands this viewer offers in its own menu.
 					if (message.command === 'tiffVisualizer.toggleScaleBar') { target.toggleScaleBar?.(); }
+					else if (message.command === 'tiffVisualizer.copyView' || message.command === 'tiffVisualizer.exportLayers') { await vscode.commands.executeCommand(message.command); }
+					break;
+				case 'didExportView':
+					viewCapture.receive(message);
 					break;
 				case 'openAsText':
 					await vscode.commands.executeCommand('vscode.openWith', document.uri, 'default');
