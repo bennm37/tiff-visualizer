@@ -26,7 +26,7 @@ import { SceneViewer } from './modules/scene/scene-viewer.js';
 import type { Camera } from './modules/scene/pyramid.js';
 import { omeChannelHints, purposeTint, type SceneManifest } from './modules/scene/xenium-manifest.js';
 import type { ScaleBarPosition } from './modules/scale-bar.js';
-import { clipboardFailure, installFocusClaim, whenFocused } from './modules/viewer-focus.js';
+import { clipboardFailure, installFocusClaim, isCopyShortcut, whenFocused } from './modules/viewer-focus.js';
 import { DEFAULT_VIEW_OPTIONS, blobToBase64, canvasToPng, type ViewOptions } from './modules/view-export.js';
 import type { ChannelDefaults } from '../shared/viewer-settings';
 
@@ -377,16 +377,30 @@ document.addEventListener('contextmenu', event => {
 
 installFocusClaim();
 
+/**
+ * The key and the browser's copy event can both arrive for one Ctrl/Cmd+C,
+ * depending on the host, so a second request within a moment is the same copy.
+ */
+let lastCopyRequest = 0;
+function copyViewOnce(): void {
+	const now = Date.now();
+	if (now - lastCopyRequest < 500) { return; }
+	lastCopyRequest = now;
+	copyView();
+}
+
 document.addEventListener('copy', event => {
 	const target = event.target as HTMLElement | null;
 	if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) { return; }
 	event.preventDefault();
-	copyView();
+	copyViewOnce();
 });
 
 window.addEventListener('keydown', event => {
 	const target = event.target as HTMLElement | null;
 	if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) { return; }
+	// Not every host turns the key into a copy event when nothing is selected, so take it here.
+	if (isCopyShortcut(event) && !window.getSelection()?.toString()) { event.preventDefault(); copyViewOnce(); return; }
 	if (event.key === 'Escape') { workspace?.clearSelection(); }
 	if ((event.key === 'c' || event.key === 'C') && !event.metaKey && !event.ctrlKey && !event.altKey) { panel?.toggle(); }
 });

@@ -9,6 +9,7 @@ function load(file) {
 }
 
 const { viewFrame, exportSize, paintView, frameScaleBarPlacement, MAX_EXPORT_AXIS } = load('media/modules/view-export.ts');
+const { isCopyShortcut } = load('media/modules/viewer-focus.ts');
 const { viewFileName, ViewCaptureChannel } = load('src/imagePreview/viewCapture.ts');
 
 function recorder() {
@@ -71,6 +72,16 @@ testSizeAndLimits();
 testPaintOrderAndIsolation();
 testScaleBarFollowsTheFrame();
 testFileName();
+
+function testCopyShortcut() {
+	const key = (key, mods = {}) => ({ key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...mods });
+	assert.equal(isCopyShortcut(key('c', { ctrlKey: true })), true, 'Ctrl+C');
+	assert.equal(isCopyShortcut(key('C', { metaKey: true })), true, 'Cmd+C, whatever the case');
+	assert.equal(isCopyShortcut(key('c')), false, 'a bare c toggles the Channels panel');
+	assert.equal(isCopyShortcut(key('c', { ctrlKey: true, shiftKey: true })), false, 'Ctrl+Shift+C is Copy Image');
+	assert.equal(isCopyShortcut(key('v', { ctrlKey: true })), false, 'other keys are not copy');
+}
+testCopyShortcut();
 
 async function testCaptureChannel() {
 	const posted = [];

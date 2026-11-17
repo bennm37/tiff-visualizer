@@ -29,3 +29,8 @@ export function clipboardFailure(error: unknown, what: string): string {
 	const text = error instanceof Error ? error.message : String(error);
 	return /focus/i.test(text) ? `Failed to copy ${what}: click the viewer first, then copy again.` : `Failed to copy ${what}: ${text}`;
 }
+
+/** Ctrl+C or Cmd+C on its own, which is how a viewer takes over copying from the browser. */
+export function isCopyShortcut(event: { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+	return (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'c';
+}
